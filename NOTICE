@@ -1,0 +1,15 @@
+KMP Updater
+Copyright (c) 2026 zerofancy
+
+Bootstrapped from Kotlin's official multiplatform library template:
+https://github.com/Kotlin/multiplatform-library-template
+Upstream revision: 226096493bde3c37595a968759ae2cf2c7618139
+
+The template is licensed under Apache License 2.0. The original license is
+retained in UPSTREAM-LICENSE.txt and continues to apply to retained upstream
+material, including the Gradle Wrapper. New project code is licensed under MIT.
+
+Changes: renamed the project and Maven coordinates; retained only Android/JVM;
+replaced the Fibonacci example; configured updater dependencies, tests, CI and
+local Maven publication; aligned Gradle/AGP/Kotlin for compileSdk 37;
+removed automatic Maven Central publishing.
