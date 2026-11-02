@@ -1,0 +1,76 @@
+package top.ntutn.updater.sample
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.dp
+import top.ntutn.updater.*
+import top.ntutn.updater.compose.*
+
+@Composable
+fun SampleApp(target: UpdateTarget, browserOpener: BrowserOpener, baseUrl: String = "https://zp.ntutn.top", foreground: Boolean = true) {
+    val focusManager = LocalFocusManager.current
+    var server by remember { mutableStateOf(baseUrl) }
+    var software by remember { mutableStateOf("sdk-demo") }
+    var code by remember { mutableStateOf("1") }
+    var packageType by remember { mutableStateOf(if (target.os == UpdateOs.Android) "apk" else "appimage") }
+    var activeConfig by remember { mutableStateOf<UpdaterConfig?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
+    var simulateBrowserFailure by remember { mutableStateOf(false) }
+    var activeFailure by remember { mutableStateOf(false) }
+    MaterialTheme {
+        Surface(Modifier.fillMaxSize()) {
+            Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("KMP Updater 示例", style = MaterialTheme.typography.headlineMedium)
+                Text("${target.os} / ${target.arch} · 浏览器下载")
+                OutlinedTextField(server, { server = it }, label = { Text("服务地址") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(software, { software = it }, label = { Text("软件内部名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(code, { code = it }, label = { Text("本地 versionCode") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(packageType, { packageType = it }, label = { Text("包类型") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                Row { Checkbox(simulateBrowserFailure, { simulateBrowserFailure = it }); Text("模拟浏览器不可用", Modifier.padding(top = 12.dp)) }
+                Button(onClick = {
+                    focusManager.clearFocus()
+                    try {
+                        activeFailure = simulateBrowserFailure
+                        activeConfig = UpdaterConfig(server, software, UpdateVersion(code.toLong(), "本地 $code"), target, packageType,
+                            allowInsecureHttp = server.startsWith("http://"))
+                        formError = null
+                    } catch (_: IllegalArgumentException) { formError = "请检查服务地址、软件名、版本号及包类型" }
+                }) { Text("应用配置") }
+                formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                activeConfig?.let { config ->
+                    key(config, activeFailure) { ActiveUpdater(config, browserOpener, activeFailure, foreground) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveUpdater(config: UpdaterConfig, browser: BrowserOpener, failBrowser: Boolean, foreground: Boolean) {
+    val checker = remember(config) { createUpdateChecker(config) }
+    DisposableEffect(checker) { onDispose { checker.close() } }
+    val opener = remember(browser, failBrowser) {
+        if (failBrowser) BrowserOpener { BrowserOpenResult.Failed(BrowserOpenError.Unavailable) } else browser
+    }
+    val controller = rememberUpdateController(checker, opener)
+    val state by controller.state.collectAsState()
+    val result by controller.lastResult.collectAsState()
+    var event by remember { mutableStateOf("") }
+    LaunchedEffect(controller) { controller.events.collect { event = "已交给浏览器处理" } }
+    Text("当前配置：${config.software} / ${config.packageType} / ${config.currentVersion.code}")
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(onClick = { event = ""; controller.check() }, enabled = state !is UpdateUiState.Checking) { Text("检查更新") }
+        OutlinedButton(onClick = { event = ""; controller.check(CheckTrigger.Silent) }) { Text("静默检测") }
+    }
+    Text("检测状态：${state::class.simpleName}")
+    Text("检测结果：${result?.let { it::class.simpleName } ?: "未检测"}")
+    if (event.isNotBlank()) Text(event)
+    if (foreground) UpdateHost(controller)
+}

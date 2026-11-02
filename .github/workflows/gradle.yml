@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,4 +27,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Test, build and verify local publication
         shell: bash
-        run: ./gradlew :updater:jvmTest :updater:testAndroidHostTest :updater:assemble :updater:publishToMavenLocal
+        run: ./gradlew :updater:jvmTest :updater:testAndroidHostTest :updater-compose:jvmTest :updater-compose:testAndroidHostTest :sample-android:assembleDebug :sample-desktop:classes :updater:publishToMavenLocal :updater-compose:publishToMavenLocal
+      - name: Consume locally published libraries
+        shell: bash
+        run: ./gradlew -PusePublishedUpdater=true :sample-android:assembleDebug :sample-desktop:classes

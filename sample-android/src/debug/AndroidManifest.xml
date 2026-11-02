@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Test fixture over adb reverse only. Release does not enable cleartext. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

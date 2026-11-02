@@ -25,15 +25,16 @@ kotlin {
     }
     sourceSets {
         commonMain.dependencies {
-            implementation(libs.ktor.client.core)
+            api(libs.ktor.client.core)
             implementation(libs.kotlinx.serialization.json)
-            implementation(libs.kotlinx.coroutines.core)
+            api(libs.kotlinx.coroutines.core)
         }
         androidMain.dependencies { implementation(libs.ktor.client.okhttp) }
         jvmMain.dependencies { implementation(libs.ktor.client.okhttp) }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.ktor.client.mock)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

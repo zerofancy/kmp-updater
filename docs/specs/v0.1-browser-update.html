@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KMP Updater · 初版 Spec</title>
+<style>
+:root{color-scheme:light;--ink:#192c37;--muted:#586975;--line:#dce4e7;--accent:#176559;--paper:#fff;--bg:#f3f6f5}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:auto;padding:48px 28px 80px}header{padding:36px;border-radius:20px;background:#173f3b;color:#fff}header p{color:#d1e7e0;max-width:800px}h1{font-size:clamp(30px,5vw,46px);line-height:1.25;margin:14px 0}h2{font-size:25px;margin:0 0 18px}h3{font-size:18px;margin:25px 0 10px}p{margin:10px 0}a{color:var(--accent)}header a{color:#b9f1de}.eyebrow{font:600 12px/1.5 system-ui;letter-spacing:2px}.meta{font-size:14px;color:var(--muted)}nav{display:flex;flex-wrap:wrap;gap:8px 20px;padding:22px 0}nav a{text-decoration:none;font-size:14px}section{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:30px;margin:0 0 20px}.note{padding:14px 18px;border-left:4px solid var(--accent);background:#edf6f2;border-radius:4px}.warn{background:#fff7e9;border-color:#b67a21}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{border:1px solid var(--line);padding:18px;border-radius:12px}.card h3{margin-top:0}ul,ol{padding-left:24px}li{margin:5px 0}code{font:13px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;background:#edf2f2;padding:2px 5px;border-radius:4px}pre{background:#152c35;color:#e0f3ee;padding:20px;border-radius:12px;overflow:auto;line-height:1.65}pre code{padding:0;background:none;color:inherit;white-space:pre;overflow-wrap:normal}.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid var(--line);text-align:left;padding:12px;vertical-align:top}th{background:#f1f6f4;font-weight:600}td:first-child{min-width:130px}.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;background:#d5eddf;color:#204b3e}.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:20px 0}.step{background:#edf6f2;border:1px solid #c9dfd5;padding:12px 16px;border-radius:9px}.dialog{background:#f6f6fa;border-radius:24px;padding:25px;max-width:440px;margin:20px auto;box-shadow:0 8px 30px #1d343c18}.dialog h3{margin:0 0 12px;font-size:24px}.dialog .description{max-height:140px;overflow:auto}.actions{display:flex;justify-content:flex-end;gap:18px;margin-top:25px}.button{color:var(--accent);font-weight:600}.button.primary{background:var(--accent);color:white;padding:5px 15px;border-radius:30px}.caption{text-align:center;color:var(--muted);font-size:13px}@media(max-width:700px){main{padding:18px 12px 40px}header,section{padding:22px}.grid{grid-template-columns:1fr}h2{font-size:22px}td,th{padding:10px}pre{padding:14px}}@media print{body{background:white;font-size:11pt}main{max-width:none;padding:0}header{background:white;color:var(--ink);border:1px solid var(--line)}header p{color:var(--muted)}nav{display:none}section{break-inside:auto;border-radius:0}h2,h3{break-after:avoid}pre{white-space:pre-wrap}pre code{white-space:pre-wrap}a{color:inherit}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="eyebrow">KMP UPDATER / RELEASE 0.1</div>
+<h1>检测更新，提示用户，交给浏览器下载</h1>
+<p>面向 Compose Multiplatform 应用的跨平台更新 SDK。初版覆盖 Android 与 JVM 桌面上的 Linux、Windows、macOS，提供统一检测结果和可选的 Compose 更新弹窗。</p>
+<p>2026-11-03 · 已按本稿实现；Linux / Android 验证报告仅本地保留于 <code>docs/verification/</code>（Git 忽略），复现步骤见 README。Windows / macOS 尚未实测。</p>
+</header>
+<nav aria-label="文档目录">
+<a href="#scope">01 范围</a><a href="#platform">02 平台</a><a href="#architecture">03 架构与 API</a><a href="#protocol">04 服务协议</a><a href="#flow">05 交互</a><a href="#browser">06 浏览器</a><a href="#errors">07 错误与生命周期</a><a href="#acceptance">08 验收</a><a href="#delivery">09 交付</a><a href="#sources">10 依据</a>
+</nav>
+<section id="scope">
+<h2>01 / 目标与范围</h2>
+<div class="note">用户点击“检查更新”或宿主发起启动检测 → SDK 查询对应安装变体 → 比较版本 → 有更新时展示提示 → 用户点击“前往下载” → 系统默认浏览器打开服务返回的下载地址。</div>
+<div class="grid">
+<div class="card"><h3>初版包含</h3><ul>
+<li>协程式更新查询；严格匹配软件、系统、架构、包类型。</li>
+<li>基于现有 <code>UpdateVersion.code: Long</code> 的版本比较。</li>
+<li>最新版本、更新说明、可选包大小的 Material 3 弹窗。</li>
+<li>手动检测与宿主触发的静默检测两种交互策略。</li>
+<li>四个平台的浏览器打开适配、失败反馈及重试入口。</li>
+<li>统一错误模型、可注入网络与浏览器边界、接入示例。</li>
+</ul></div>
+<div class="card"><h3>后续版本范围</h3><ul>
+<li>SDK 内下载、进度、断点续传、安装器、后台更新。</li>
+<li>文件校验、签名验证、差分、自动重启或回滚。</li>
+<li>强制更新、灰度、正式 / 预览通道、最低系统版本判断。</li>
+<li>忽略某一版本、持久化提醒间隔、定时轮询。</li>
+<li>Markdown 渲染、累计更新日志、多包选择页。</li>
+<li>iOS、Web、Kotlin/Native 桌面及 32 位架构。</li>
+</ul></div>
+</div>
+<p>初版不要求修改更新服务协议；服务地址由宿主传入，本文接入示例使用 <code>https://zp.ntutn.top</code>。SDK 不硬编码某个软件名或某个部署地址。</p>
+</section>
+<section id="platform">
+<h2>02 / 平台、架构与安装变体</h2>
+<div class="table"><table>
+<thead><tr><th>运行平台</th><th>KMP target / 协议 os</th><th>架构</th><th>常见 packageType（示例）</th></tr></thead>
+<tbody>
+<tr><td>Android</td><td>Android / <code>Android</code></td><td>ARM64、X86_64</td><td>apk</td></tr>
+<tr><td>Linux</td><td>JVM / <code>Linux</code></td><td>X86_64、ARM64</td><td>appimage、deb、rpm、tar-gz</td></tr>
+<tr><td>Windows</td><td>JVM / <code>Windows</code></td><td>X86_64、ARM64</td><td>exe、msi、zip</td></tr>
+<tr><td>macOS</td><td>JVM / <code>MacOS</code></td><td>ARM64、X86_64</td><td>dmg、pkg、zip</td></tr>
+</tbody></table></div>
+<p>macOS 复用现有 JVM target，不新增 Kotlin/Native target。Android 保持当前工程 minSdk 24；SDK JVM 字节码保持当前 JVM 11 目标，实际 CMP 宿主运行时要求由其 Compose 版本决定。</p>
+<h3>目标解析规则</h3>
+<ul>
+<li><code>software</code>、<code>currentVersion</code>、<code>packageType</code> 必须由宿主显式配置。版本来自构建元数据，包类型来自当前安装变体，不能按文件后缀或最大版本猜测。</li>
+<li>提供平台目标探测工厂：桌面按运行中 JVM 的 <code>os.name</code> / <code>os.arch</code> 识别，amd64、x86_64 → X86_64；aarch64、arm64 → ARM64。其他值返回 <code>UnsupportedPlatform</code>。</li>
+<li>Android 使用当前进程位数与设备支持 ABI 共同判断；仅 32 位进程直接返回不支持，不因设备支持 ARM64 而选取 ARM64 包。</li>
+<li>自动探测反映运行环境，不能可靠推断原安装包。宿主可显式覆盖架构；Rosetta、Windows ARM 上的 x64 JVM 等场景默认沿用进程架构，不自动切换原生架构。</li>
+<li>包类型为开放标识，必须与服务端发布数据完全一致。exe-installer 与 exe-portable 等变体应分别配置；不在 apk、deb、dmg 等类型之间自动切换。</li>
+<li>当前服务仅支持两种架构，32 位 Android / x86 / ARMv7 不纳入初版，不退化为不带 arch 的宽查询。</li>
+</ul>
+<div class="note">一个更新序列 = <code>(software, os, arch, packageType)</code>。本地 versionCode 必须与该序列使用同一递增尺度。商店与侧载、不同 Linux 发行版等安装兼容性由宿主及发布方保证；服务不提供这些维度的判断。</div>
+</section>
+<section id="architecture">
+<h2>03 / 模块与公共 API</h2>
+<div class="table"><table>
+<tr><th>模块 / 坐标</th><th>职责</th><th>依赖边界</th></tr>
+<tr><td><code>:updater</code><br>kmp-updater</td><td>配置、平台识别、服务适配、比较、结果模型、浏览器适配。</td><td>保留 Ktor / Serialization / Coroutines；不依赖 Compose。</td></tr>
+<tr><td><code>:updater-compose</code><br>kmp-updater-compose</td><td>检测控制器、状态、Material 3 更新对话框、默认中文 / 英文文案。</td><td>依赖核心及 Compose；版本与宿主兼容性需在实现时锁定并记录。</td></tr>
+<tr><td>示例宿主</td><td>Android 与桌面演示手动检测、静默检测、浏览器失败。</td><td>不作为 SDK 运行依赖。</td></tr>
+</table></div>
+<h3>拟议接口形状</h3>
+<p class="meta">以下为评审用 API 草案，完整构造器与平台工厂在实现时补齐。公共类型继续使用显式 API；现有 UpdateVersion 保持兼容。</p>
+<pre><code>data class UpdateTarget(val os: UpdateOs, val arch: UpdateArch)
+data class UpdaterConfig(
+    val baseUrl: String,
+    val software: String,
+    val currentVersion: UpdateVersion,
+    val target: UpdateTarget,
+    val packageType: String,
+    val requestTimeout: Duration = 10.seconds,
+    val allowInsecureHttp: Boolean = false,
+)
+
+interface UpdateChecker {
+    suspend fun check(): UpdateCheckResult
+}
+sealed interface UpdateCheckResult {
+    data class Available(val release: UpdateRelease) : UpdateCheckResult
+    // 相等或服务版本更低均不升级；保留 latest 供宿主诊断。
+    data class UpToDate(val latest: UpdateVersion) : UpdateCheckResult
+    data object NoMatchingPackage : UpdateCheckResult
+    data class Failed(val error: UpdateError) : UpdateCheckResult
+}
+
+interface BrowserOpener {
+    suspend fun open(url: String): BrowserOpenResult
+}
+sealed interface BrowserOpenResult {
+    data object Dispatched : BrowserOpenResult
+    data class Failed(val reason: BrowserOpenError) : BrowserOpenResult
+}
+
+// Compose 模块：名称为拟议 API；状态由控制器以 StateFlow 暴露。
+enum class CheckTrigger { Manual, Silent }
+// rememberUpdateController(checker, browserOpener)
+// controller.check(CheckTrigger.Manual)
+// UpdateHost(controller, strings = UpdateStrings.Chinese)</code></pre>
+<p><code>UpdateRelease</code> 至少包含目标序列、<code>version: UpdateVersion</code>、软件展示名、分发标题、包名、分发 / 包 ID、发布时间、下载 URL、可空字节数和两种可空更新说明。ID 保留为不透明字符串；版本和字节数使用 Long，DTO 与公共模型分离。</p>
+<h3>接入方式</h3>
+<pre><code>// commonMain：示意代码，工厂名称待实现时落定。
+val config = UpdaterConfig(
+    baseUrl = "https://zp.ntutn.top",
+    software = BuildInfo.updateSoftware,       // 服务端软件内部名
+    currentVersion = UpdateVersion(BuildInfo.versionCode, BuildInfo.versionName),
+    target = platformTarget,                  // 平台工厂探测或宿主指定
+    packageType = BuildInfo.updatePackageType,
+)
+val checker = createUpdateChecker(config)
+
+// Compose 根节点：按宿主生命周期创建 / 释放 checker。
+val controller = rememberUpdateController(checker, platformBrowserOpener)
+UpdateHost(controller, strings = UpdateStrings.Chinese)
+// “检查更新”按钮的 onClick：controller.check(CheckTrigger.Manual)
+// 可选启动检测：LaunchedEffect(controller) { controller.check(CheckTrigger.Silent) }</code></pre>
+<p>宿主可仅使用核心，自行渲染提示和打开地址。默认组件提供整体文案对象，默认简体中文，附带英文预设；允许传入自定义文案及 <code>MaterialTheme</code>。初版不绑定应用资源系统，也不提供全局单例。</p>
+</section>
+<section id="protocol">
+<h2>04 / 与 updater-server 的协议</h2>
+<h3>精确查询</h3>
+<pre><code>GET https://zp.ntutn.top/api/v1/updates
+    ?software=&lt;内部名&gt;&amp;os=Linux&amp;arch=X86_64&amp;packageType=appimage
+Accept: application/json</code></pre>
+<p>只发送上述四个查询参数，各一次，统一经 URL 编码。<code>currentVersionCode</code> 不发给服务端；不使用登录、Cookie 或 Authorization。baseUrl 必须是无查询、片段和凭据的 HTTP(S) origin（可含端口与根路径 /），不支持部署子路径；请求路径固定为 <code>/api/v1/updates</code>。</p>
+<div class="table"><table>
+<tr><th>参数</th><th>本地校验</th></tr>
+<tr><td>software</td><td><code>[a-z0-9][a-z0-9._-]{0,99}</code></td></tr>
+<tr><td>os / arch</td><td>严格映射协议枚举；macOS 对应 <code>MacOS</code>，不可发送 macOS。</td></tr>
+<tr><td>packageType</td><td><code>[a-z0-9][a-z0-9-]{0,31}</code>；初版 SDK 必填。</td></tr>
+<tr><td>currentVersion</td><td>code &gt; 0，name 非空；不自动 trim 或修改标识。</td></tr>
+</table></div>
+<h3>成功结果校验与比较</h3>
+<ol>
+<li>HTTP 200 且为 JSON；<code>query</code> 四项与本次请求一致，<code>items</code> 恰好一项。</li>
+<li>结果项的四个序列维度精确匹配，内外层 <code>packageType</code> 一致。任何空数组、多项、维度不符均为 <code>InvalidResponse</code>，不任选一项。</li>
+<li><code>versionCode</code> 必须是十进制数字字符串，解析为 1…Long.MAX_VALUE；<code>versionName</code> 为非空字符串。不接受 JSON 数字、溢出、浮点、SemVer 排序或字典序比较。</li>
+<li><code>packageSize</code> 为 null 或非负 Long 的十进制数字字符串，缺失按 null；"0" 保留为 0。版本 / URL 等关键字段缺失或格式错误时判为无效响应。</li>
+<li>未知字段忽略；两种 description 缺失、null、空白均按无内容处理。发布时间按 RFC 3339 解析，ID 作为字符串保存；展示元数据缺失时用本地软件名 / 包类型回退，时间缺失或无效时省略显示。</li>
+<li>校验下载 URL 后，比较 <code>latest.code &gt; current.code</code>：大于返回 Available；相等或更低返回 UpToDate。低版本不触发降级，不跨序列比较。</li>
+</ol>
+<p>服务按每个完整序列的最大 versionCode 选包，发布时间和分发标题不参与排序。通用包可以覆盖多个架构；精确查询仍只取一个目标。服务当前没有通道字段，beta 等字样不会被自动排除。</p>
+<h3>说明展示</h3>
+<p>初版优先将非空 <code>descriptionPlainText</code> 放入纯文本控件；否则将 <code>descriptionMarkdown</code> 原样作为纯文本展示；均无内容时隐藏说明区。不解释 HTML、不加载外部图片、不自动将说明中的链接变为可点击元素。保留换行，长内容在说明区滚动。仅展示所选分发的说明，不拼接跨版本历史。</p>
+<div class="note warn">线上只做了无副作用探测：2026-11-03，使用示例 software=kica 的精确查询返回 HTTP 404 / SOFTWARE_NOT_FOUND，说明公开路由可响应，但该标识不能用于当前生产正例。成功结构依据本地服务代码和测试；联调必须换成实际发布的软件及变体。</div>
+</section>
+<section id="flow">
+<h2>05 / 状态与用户交互</h2>
+<div class="flow" aria-label="主要更新流程"><span class="step">Idle</span><span>→</span><span class="step">Checking</span><span>→</span><span class="step">Available</span><span>→</span><span class="step">OpeningBrowser</span><span>→</span><span class="step">Idle</span></div>
+<div class="table"><table>
+<tr><th>结果 / 事件</th><th>手动检测 Manual</th><th>静默检测 Silent</th></tr>
+<tr><td>Checking</td><td>非阻塞进度提示；宿主按钮可按状态禁用。</td><td>不显示进度；状态仍可观察。</td></tr>
+<tr><td>Available</td><td colspan="2">弹出更新提示；仅主动点击“前往下载”才打开浏览器。</td></tr>
+<tr><td>UpToDate</td><td>提示“当前已是最新版本”。低版本结果文案为“暂无可用更新”。</td><td>无提示，回到 Idle。</td></tr>
+<tr><td>NoMatchingPackage</td><td>提示“暂无适用于当前安装版本的更新包”。</td><td>无提示，暴露结果供诊断。</td></tr>
+<tr><td>检测失败</td><td>失败提示，提供“重试”“关闭”。</td><td>不打扰用户；暴露错误；不后台自动重试。</td></tr>
+<tr><td>暂不更新 / 返回键 / 外部点击</td><td colspan="2">关闭提示回到 Idle；不记录忽略版本。下一次显式检测仍可提示。</td></tr>
+<tr><td>浏览器交接成功</td><td colspan="2">关闭弹窗回到 Idle，产生一次 BrowserDispatched 事件；不显示下载 / 安装成功。</td></tr>
+<tr><td>浏览器打开失败</td><td colspan="2">保留该版本提示，显示“无法打开浏览器”，提供“重试打开”和可选择复制的完整下载地址。</td></tr>
+</table></div>
+<div class="dialog" role="img" aria-label="更新提示静态示意">
+<h3>发现新版本</h3>
+<p><strong>示例应用 1.2.0</strong></p><p class="meta">当前 1.1.0 → 最新 1.2.0 · 64.2 MiB</p>
+<div class="description">本次更新<br>• 改善启动体验<br>• 修复已知问题</div>
+<p class="meta">将在浏览器中打开下载地址</p>
+<div class="actions"><span class="button">暂不更新</span><span class="button primary">前往下载</span></div>
+</div>
+<p class="caption">静态交互示意；最终视觉遵循宿主 Material 3 主题。</p>
+<ul>
+<li>弹窗标题、当前 / 最新版本、更新说明、操作按钮必须可读。包大小未知时省略，已知时按 1024 进制格式化并使用 KiB / MiB / GiB。</li>
+<li>内容较长、小屏、系统大字体下仍可滚动且按钮可到达；支持桌面 Tab 导航、Enter 激活焦点按钮与 Esc 关闭。打开期间禁用重复确认，取消仍能关闭提示。</li>
+<li>用户离开页面 / 应用进入后台后不突然弹窗。宿主只在前台挂载 UpdateHost；待展示结果可保留在当前控制器内，恢复前台后展示。</li>
+<li>启动检测由宿主放入一次性生命周期逻辑，不在重组中触发。SDK 不自行监听启动、不轮询、不主动打开浏览器。</li>
+</ul>
+</section>
+<section id="browser">
+<h2>06 / 浏览器跳转与 URL 规则</h2>
+<div class="table"><table>
+<tr><th>平台</th><th>默认实现</th><th>失败行为</th></tr>
+<tr><td>Android</td><td><code>Intent.ACTION_VIEW</code> + CATEGORY_BROWSABLE，使用应用 Context 时加 NEW_TASK；无 WebView。</td><td>无处理 Activity、被系统拒绝等转换为结构化错误，不崩溃。</td></tr>
+<tr><td>Linux</td><td>优先 <code>Desktop.browse</code>；不支持或明确失败时调用 <code>xdg-open</code>。</td><td>缺少图形会话 / 命令 / 默认处理程序时返回失败。</td></tr>
+<tr><td>Windows</td><td><code>Desktop.browse</code>，交由系统 URL 关联。</td><td>不支持或调用抛错时返回失败；宿主可注入适配器。</td></tr>
+<tr><td>macOS</td><td>优先 <code>Desktop.browse</code>；不支持或明确失败时使用 <code>/usr/bin/open</code>。</td><td>启动失败或命令返回非零时返回失败。</td></tr>
+</table></div>
+<p>系统 URL 关联可能交给浏览器或已注册的链接处理应用，SDK 无法强制特定浏览器。成功仅表示系统接受打开请求；不能验证页面是否可达、文件是否下载或应用是否更新。</p>
+<ul>
+<li>查询地址与下载地址默认必须为绝对 HTTPS URL，host 非空、无用户凭据、无控制字符。下载地址可跨域（例如对象存储），不限制为更新服务器域名。</li>
+<li>开发环境通过 <code>allowInsecureHttp=true</code> 显式允许 HTTP；Android 明文访问所需宿主配置由示例说明。禁止 file、javascript、intent 等非 HTTP(S) scheme。</li>
+<li>查询不跟随 HTTP 重定向，3xx 映射为服务错误，防止请求自动降级到 HTTP。下载跳转由外部处理程序负责，SDK 不探测 HEAD、不跟踪其后续重定向。</li>
+<li>外部命令采用参数数组传 URL，禁止拼接 shell 命令；等待退出放在 IO 调度器，最多等待 5 秒，非零退出 / 超时返回失败。已经交接后的结果仍不能证明网页加载成功。</li>
+<li>打开前再次校验传入 URL；只使用当前展示版本的 URL，防止旧结果 / 多次点击串包。可注入 BrowserOpener 便于测试与宿主定制。</li>
+</ul>
+</section>
+<section id="errors">
+<h2>07 / 错误、并发与资源生命周期</h2>
+<div class="table"><table>
+<tr><th>场景</th><th>核心结果</th><th>处理规则</th></tr>
+<tr><td>本地配置非法</td><td>构造时 IllegalArgumentException</td><td>属于宿主接入错误；平台工厂不支持时使用类型化失败，不发网络请求。</td></tr>
+<tr><td>404 / NO_MATCHING_PACKAGE</td><td>NoMatchingPackage</td><td>不等同于 UpToDate。</td></tr>
+<tr><td>400 / INVALID_ARGUMENT<br>404 / SOFTWARE_NOT_FOUND</td><td>Failed(ServiceConfiguration)</td><td>检查客户端配置或服务端软件标识；不原样自动重试。</td></tr>
+<tr><td>409 / AMBIGUOUS_LATEST</td><td>Failed(AmbiguousLatest)</td><td>服务端修复发布数据；不随机选包。</td></tr>
+<tr><td>429 / 500 / 503 / 其他 HTTP</td><td>Failed(ServiceUnavailable / Http)</td><td>保留 status 与可识别 error.code；用户显式重试。429 有合法 Retry-After 时保留重试时间并禁用过早重试，无效时默认 30 秒。</td></tr>
+<tr><td>DNS / TLS / 断网 / 超时</td><td>Failed(Network / Timeout)</td><td>总查询超时默认 10 秒，可配置正 Duration；不阻塞主线程、不跳过 TLS 验证。</td></tr>
+<tr><td>非 JSON / 错误 JSON / 无效字段</td><td>Failed(InvalidResponse)</td><td>代理 HTML、200 空数组、Long 溢出均不能解释为没有更新。</td></tr>
+<tr><td>非法下载 URL</td><td>Failed(UnsafeDownloadUrl)</td><td>不展示可确认的更新操作，也不打开地址。</td></tr>
+<tr><td>取消</td><td>传播 CancellationException</td><td>不包装成 Failed；结束加载状态，不弹检测失败。</td></tr>
+</table></div>
+<ul>
+<li>同一 Compose 控制器只允许一个查询。重复点击合并到当前任务，不排队；进行中的 Silent 查询收到 Manual 触发时提升为手动反馈策略。</li>
+<li>已有 Available 弹窗时重复检测只保留当前提示；关闭后可重新查询。OpeningBrowser 时禁用再次打开。控制器在销毁 / 配置变化时取消任务，旧结果不得覆盖新配置。</li>
+<li>核心 <code>check()</code> 是独立 suspend 调用，不持有 UI scope；不同调用方的并发由调用方管理。SDK 不创建 GlobalScope。</li>
+<li>Compose 控制器由 composition scope 管理，业务状态用 StateFlow，瞬时通知只消费一次；取消后恢复可再次检测的状态。配置变化必须重新创建 checker / 控制器。</li>
+<li>默认工厂创建并拥有 HttpClient，提供可重复调用的 close()，取消在途请求并释放资源；宿主注入的 HttpClient 由宿主关闭。Android 适配器不长期持有 Activity。</li>
+<li>默认无持久缓存、后台重试、遥测和日志输出。错误可带诊断码，不直接把服务器 message 当用户文案；日志若由宿主开启，避免记录完整下载 URL 中的临时签名参数。</li>
+<li>响应读取上限 256 KiB，超出即 InvalidResponse 并取消读取。该上限覆盖当前服务两段各最多 10,000 字符的说明；避免无界读取意外响应。</li>
+</ul>
+</section>
+<section id="acceptance">
+<h2>08 / 验收清单</h2>
+<div class="table"><table>
+<tr><th>层级</th><th>必须通过的场景</th></tr>
+<tr><td>核心 / MockEngine</td><td>精确四参数及 URL 编码；正确 os 枚举；10 &gt; 9、等于、更低、Long.MAX_VALUE；说明缺失；包大小 null / 0；新增字段兼容。</td></tr>
+<tr><td>响应防错</td><td>空 / 多 items、query 或 target 不符、内外包类型不符、错误类型 / 缺字段、非法 URL、版本溢出、HTML 响应、超大响应均失败；不误报无更新。</td></tr>
+<tr><td>失败与取消</td><td>覆盖所有已知服务错误、未知 HTTP / error.code、429 冷却、3xx、网络故障、超时；CancellationException 传播且状态复位；close 的所有权及在途取消。</td></tr>
+<tr><td>控制器 / UI</td><td>手动和静默反馈差异、取消关闭、重复触发合并、Silent 提升 Manual、配置切换旧结果隔离；重组不重复检测；浏览器失败可重试、成功仅交接。</td></tr>
+<tr><td>Android 真机 / 模拟器</td><td>ARM64 真机与 X86_64 模拟器检测、弹窗、默认处理程序打开；32 位不支持；返回应用后不报更新成功；无处理程序通过可控适配器模拟。</td></tr>
+<tr><td>三种桌面真实环境</td><td>Linux、Windows、macOS 分别运行已打包 CMP 示例；验证探测、键盘 / 大字体、浏览器打开、失败显示；Linux / macOS 命令回退单独验证。</td></tr>
+<tr><td>架构覆盖</td><td>所有平台 / 别名 / 不支持映射做单测；可获取的 ARM64 / X86_64 环境做实测。未实测的系统架构组合必须在报告中明确标记，不能用 JVM 单测替代。</td></tr>
+<tr><td>服务联调</td><td>在可控测试软件与发布序列中验证：高版本提示、相同 / 更低版本无更新、没有匹配包、更新说明和浏览器 URL 完整保留。不得修改生产业务发布记录来造测试数据。</td></tr>
+<tr><td>发布可消费性</td><td>两个库 publishToMavenLocal；Android 与桌面示例用发布坐标接入；核心消费者无需引入 Compose；记录 Compose 兼容基线。</td></tr>
+</table></div>
+<p>完整初版验收要求四个系统均完成检测 → 提示 → 浏览器交接。无法取得 Windows / macOS 等真实环境时可完成代码与自动化测试，但验收报告必须保留对应未验证项。</p>
+</section>
+<section id="delivery">
+<h2>09 / 实现顺序与交付物</h2>
+<ol>
+<li><strong>核心协议：</strong>配置与模型、Ktor 查询、严格响应校验、版本比较和错误测试。</li>
+<li><strong>平台边界：</strong>目标探测、Android / JVM 浏览器实现、取消 / 资源管理。</li>
+<li><strong>CMP 提示：</strong>新增 updater-compose，完成控制器、Material 3 弹窗与文案定制。</li>
+<li><strong>集成与验证：</strong>Android / 桌面示例、本地发布消费、测试服务联调和四系统实测报告。</li>
+</ol>
+<p>交付包含两个库模块、示例应用、接入 README、公开 API 说明、构建 / 测试配置及 HTML 验证报告。初版实现不包含远端 Maven 发布或更新服务部署；如需发布另行明确目标与版本。</p>
+<div class="note"><strong>本稿的默认决策：</strong>提供可选 Material 3 弹窗；固定原安装变体；纯文本说明；不持久忽略版本；启动检测由宿主触发；默认 HTTPS。以上为已采用的初版实现基线，公开 API 以当前 README 与源码为准。</div>
+</section>
+<section id="sources">
+<h2>10 / 设计依据与现状</h2>
+<p>本稿起草时 SDK 只有 Android / JVM 基础工程及 UpdateVersion，尚未实现查询、Compose UI 或浏览器适配；当前接入方式见 README。以下本地来源于 2026-11-03 检查，部署状态与源码状态分别判断。</p>
+<ul>
+<li><a href="../../README.md">SDK README</a> · <a href="../../updater/build.gradle.kts">模块配置</a> · <a href="../../updater/src/commonMain/kotlin/top/ntutn/updater/UpdateVersion.kt">现有版本模型</a></li>
+<li><a href="../../../updater-server/docs/update-api.html">服务端接入文档</a>（相邻仓库路径，适用于本机 review）。</li>
+<li><a href="../../../updater-server/src/main/kotlin/top/ntutn/update/routing/UpdateRoutes.kt">UpdateRoutes.kt</a> · <a href="../../../updater-server/src/main/kotlin/top/ntutn/update/service/UpdateQuery.kt">UpdateQuery.kt</a> · <a href="../../../updater-server/src/main/kotlin/top/ntutn/update/repository/UpdateRepository.kt">UpdateRepository.kt</a>：请求参数、响应字段和按序列选包规则。</li>
+<li><a href="../../../updater-server/src/test/kotlin/top/ntutn/update/UpdateApiTest.kt">UpdateApiTest.kt</a>：精度、歧义、无匹配、通用包和说明字段约定；本次仅阅读，未重新运行服务测试。</li>
+<li><a href="https://zp.ntutn.top">线上服务</a>：本次仅验证公开查询错误响应，不声称完成生产正例联调。</li>
+</ul>
+</section>
+<p class="meta">KMP Updater · v0.1 browser update spec · 2026-11-03</p>
+</main></body></html>

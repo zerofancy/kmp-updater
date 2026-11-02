@@ -1,0 +1,13 @@
+// Adds the SDK's fixture source to an adjacent updater-server build without editing its source tree.
+allprojects {
+    afterEvaluate { project ->
+        if (project == rootProject) {
+            kotlin.sourceSets.main.kotlin.srcDir(System.getenv('KMP_UPDATER_FIXTURE_SOURCE'))
+            tasks.register('runSdkFixture', JavaExec) {
+                dependsOn 'classes'
+                classpath = sourceSets.main.runtimeClasspath
+                mainClass = 'top.ntutn.update.fixture.SdkFixtureKt'
+            }
+        }
+    }
+}
