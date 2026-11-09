@@ -6,11 +6,11 @@
 
 ## 模块与依赖
 
-- `updater` / `io.github.zerofancy:kmp-updater:0.1.0-SNAPSHOT`：独立检测核心和平台浏览器适配，不依赖 Compose。
-- `updater-compose` / `io.github.zerofancy:kmp-updater-compose:0.1.0-SNAPSHOT`：可选 Material 3 提示与状态控制器，传递依赖核心。
+- `updater` / `io.github.zerofancy:kmp-updater:0.1.1`：独立检测核心和平台浏览器适配，不依赖 Compose。
+- `updater-compose` / `io.github.zerofancy:kmp-updater-compose:0.1.1`：可选 Material 3 提示与状态控制器，传递依赖核心。
 - `sample-shared`、`sample-android`、`sample-desktop`：可配置的 Android / 桌面示例。
 
-当前通过 `publishToMavenLocal` 使用，未发布 Maven Central。构建需要 JDK 21、Android SDK 37；
+从 [GitHub Releases](https://github.com/zerofancy/kmp-updater/releases) 下载并解压 Maven 仓库压缩包，将解压目录加入 Gradle 的依赖仓库，例如 `maven { url = uri("/path/to/kmp-updater-0.1.1-maven") }`。也可从源码执行 `publishToMavenLocal`，然后在宿主启用 `mavenLocal()`。构建需要 JDK 21、Android SDK 37；
 库 JVM 字节码目标为 11，桌面示例使用 JDK 21 打包。Compose Multiplatform 1.12.1、Material 3 1.9.0、
 Kotlin 2.4.20 为本版验证基线，版本集中在 `gradle/libs.versions.toml`。
 
@@ -18,7 +18,7 @@ Kotlin 2.4.20 为本版验证基线，版本集中在 `gradle/libs.versions.toml
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.zerofancy:kmp-updater-compose:0.1.0-SNAPSHOT")
+    implementation("io.github.zerofancy:kmp-updater-compose:0.1.1")
     // 无默认 UI 时只引用 kmp-updater。
 }
 ```

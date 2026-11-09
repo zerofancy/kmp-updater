@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KMP Updater · 更新弹窗版本描述</title>
+<style>
+:root { color-scheme: light; --ink: #192c37; --muted: #526773; --line: #dce4e7; --accent: #176559; --tint: #edf6f2; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f6f5; color: var(--ink); font: 16px/1.75 system-ui, sans-serif; }
+main { max-width: 960px; margin: auto; padding: 40px 24px 64px; }
+header, section { border-radius: 16px; padding: 28px 32px; }
+header { background: #173f3b; color: #fff; }
+header p { color: #d1e7e0; margin-bottom: 0; }
+.eyebrow, .meta { font-size: 14px; }
+.eyebrow { letter-spacing: .09em; }
+h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.2; margin: 10px 0; }
+h2 { font-size: 24px; margin: 0 0 12px; }
+h3 { font-size: 17px; margin: 20px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+nav { display: flex; flex-wrap: wrap; gap: 6px 20px; padding: 16px 0; font-size: 14px; }
+section { background: #fff; border: 1px solid var(--line); margin-bottom: 16px; }
+.meta { color: var(--muted); }
+.note { background: var(--tint); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 4px; }
+code { font: .88em/1.65 ui-monospace, monospace; background: #edf2f2; padding: 2px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: #152c35; color: #e0f3ee; border-radius: 8px; padding: 14px; overflow: auto; }
+pre code { color: inherit; background: none; padding: 0; overflow-wrap: normal; }
+ol, ul { padding-left: 24px; }
+li { margin: 5px 0; }
+.table { overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { border-bottom: 1px solid var(--line); padding: 10px 12px; vertical-align: top; text-align: left; }
+th { background: var(--tint); }
+.dialog { max-width: 410px; margin: 16px auto; padding: 20px 24px; background: #f4f5fa; border-radius: 20px; }
+.dialog h3 { margin: 0; font-size: 21px; }
+.actions { display: flex; justify-content: flex-end; gap: 20px; color: var(--accent); font-weight: 600; margin-top: 16px; }
+@media (max-width: 620px) { main { padding: 16px 12px 40px; } header, section { padding: 20px; } }
+@media print { body { background: #fff; } main { max-width: none; padding: 0; } header { background: #fff; color: var(--ink); border: 1px solid var(--line); } header p { color: var(--muted); } nav { display: none; } h2, h3 { break-after: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">KMP UPDATER · 2026-11-09</div>
+<h1>更新弹窗显示新版本描述</h1>
+<p>用户发现新版本时，可在点击「前往下载」之前阅读该版本的更新内容。</p>
+</header>
+<nav aria-label="文档目录">
+<a href="#scope">01 范围</a><a href="#flow">02 发布与下发</a><a href="#ui">03 弹窗行为</a><a href="#acceptance">04 验收</a><a href="#online">05 线上样本</a><a href="#references">依据</a>
+</nav>
+
+<section id="scope">
+<h2>01 / 范围</h2>
+<p>覆盖使用 <code>https://zp.ntutn.top</code> 检查更新的 Android 和 JVM 桌面宿主。每次弹窗展示精确命中的最新安装包所属分发的说明。同一分发的安装包共享说明。</p>
+<p class="note">当前仓库的核心 SDK 已解析说明，Android 和桌面共用的 <code>UpdateHost</code> 已展示说明。采用现有发布字段和检查更新接口。宿主使用默认弹窗时复用 <code>UpdateHost</code>，自绘弹窗时从 <code>UpdateCheckResult.Available.release.description</code> 取正文。</p>
+</section>
+
+<section id="flow">
+<h2>02 / 发布与下发</h2>
+<h3>分发管理</h3>
+<ol>
+<li>发布者在新建或编辑分发时填写「纯文本版本」。正文直接面向用户，推荐一条改动一行。</li>
+<li>同时维护 Markdown 时，可点「从Markdown版本同步」，再复核换行、列表和用词。两栏独立保存，同步后的内容随分发表单保存后生效。</li>
+<li>为已发布版本补录时，编辑线上查询选中的 <code>distributionId</code>。补录说明可沿用现有包和版本号。</li>
+</ol>
+<h3>公开检查更新接口</h3>
+<pre><code>GET /api/v1/updates?software=&lt;内部名&gt;&amp;os=&lt;系统&gt;&amp;arch=&lt;架构&gt;&amp;packageType=&lt;包类型&gt;
+Accept: application/json</code></pre>
+<p>用宿主实际配置的四项参数精确查询。HTTP 200 的 <code>items[0].latest</code> 同时返回包的 <code>versionCode</code>、<code>versionName</code>、<code>distributionId</code> 和该分发的两种说明。按匹配序列内最高 <code>versionCode</code> 选包，管理页上的分发发布时间或排序不决定匹配结果。检查更新接口公开访问，登录仅用于维护分发。</p>
+<div class="table">
+<table>
+<thead><tr><th scope="col">返回字段</th><th scope="col">SDK 取值</th></tr></thead>
+<tbody>
+<tr><td><code>descriptionPlainText</code></td><td>有非空白字符串时用作正文。</td></tr>
+<tr><td><code>descriptionMarkdown</code></td><td>纯文本无内容时，用非空白 Markdown 原文作为正文。</td></tr>
+<tr><td>两字段均无内容</td><td>缺失、<code>null</code>、空串或全空白均视为无内容，弹窗省略说明区。</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="ui">
+<h2>03 / 弹窗行为</h2>
+<ul>
+<li>线上包的 <code>versionCode</code> 大于本地时，手动检查和静默检查共用同一描述展示规则。</li>
+<li>正文放在版本与可选包大小下方、浏览器提示上方。保留原换行，长内容可在正文区滚动，操作按钮在滚动区外。</li>
+<li>两种来源都按纯文本显示。Markdown 标记、HTML 片段和 URL 作为字符显示，点击「前往下载」才打开本次查询的下载链接。</li>
+<li>弹窗使用本次检查结果。发布者补录后，关闭已打开的弹窗并重新检查。若该包对本地仍是新版本，新弹窗显示补录后的说明。</li>
+</ul>
+<div class="dialog" aria-label="更新弹窗示意">
+<h3>发现新版本</h3>
+<p><strong>示例应用 1.4.0</strong><br>当前 1.3.0 → 最新 1.4.0</p>
+<p>修复切换工作区后列表偶尔为空的问题。<br>减少启动时的等待时间。</p>
+<p class="meta">将在浏览器中打开下载地址</p>
+<div class="actions"><span>暂不更新</span><span>前往下载</span></div>
+</div>
+<p class="meta">示意文案。线上正文由对应分发提供。</p>
+</section>
+
+<section id="acceptance">
+<h2>04 / 验收</h2>
+<ol>
+<li>记录宿主实际使用的 SDK 构建和四项查询参数。查询线上接口，记录 HTTP 状态、目标版本、<code>distributionId</code> 与说明取值。</li>
+<li>用配置相同、版本号低于线上返回值的宿主或样例检查更新。弹窗展示同一版本和同一份说明，中文和换行可读，长文可滚动。</li>
+<li>在 Android 和 JVM 桌面各验证一次显示，分别使用匹配该平台的发布包。桌面可用本地 fixture 验证。正式接入使用自绘弹窗时，在实际宿主中验证其消费了同一个 <code>release.description</code>。</li>
+</ol>
+<div class="table">
+<table>
+<thead><tr><th scope="col">场景</th><th scope="col">通过条件</th></tr></thead>
+<tbody>
+<tr><td>纯文本与 Markdown 不同</td><td>只显示纯文本。</td></tr>
+<tr><td>仅有 Markdown</td><td>按原文显示，保留换行。</td></tr>
+<tr><td>两种说明均无内容</td><td>弹窗正常展示版本和下载操作，省略说明区。</td></tr>
+<tr><td>本地版本与线上相等或更高</td><td>不出现新版本弹窗。</td></tr>
+</tbody>
+</table>
+</div>
+<p>优先复用 <code>UpdateCheckerTest</code> 的字段取值用例和 Android 样例的 <code>updateShowsPlainTextAndCanDismiss</code>。仅 Markdown、双空与长文等输入可通过本地 fixture 覆盖。</p>
+<h3>定位未显示的原因</h3>
+<ul>
+<li>请求未命中包或没有更新弹窗时，先核对四项参数和本地 <code>versionCode</code>。</li>
+<li>HTTP 200 但缺少两个说明键时，核对线上部署的接口契约。键已返回但取值均为空时，按 <code>distributionId</code> 检查分发是否录入说明。</li>
+<li>线上有说明且返回了可更新版本时，核对宿主实际依赖版本、默认 <code>UpdateHost</code> 挂载和自绘弹窗的正文取值。</li>
+</ul>
+</section>
+
+<section id="online">
+<h2>05 / 线上样本</h2>
+<p>2026-11-09，使用 <code>awell / Android / ARM64 / apk</code> 精确查询，HTTP 200 返回 AWell <code>1.0.1</code>（<code>versionCode=2</code>，<code>distributionId=8</code>）。两个说明字段均有内容。<a href="https://zp.ntutn.top/api/v1/updates?software=awell&amp;os=Android&amp;arch=ARM64&amp;packageType=apk">公开 API 响应</a></p>
+<blockquote class="note">在主界面底部新增手动检查更新。发现新版时可查看发布说明，并用浏览器下载 APK。最低支持 Android 7.0。</blockquote>
+<p>Android ARM64 真机使用本仓库样例，配置该序列与本地 <code>versionCode=1</code>，已确认直接从线上查询并显示 AWell <code>1.0.1</code> 的正文。Android 样例的本地服务回归用例也通过，断言纯文本可见、Markdown 原文未出现。</p>
+<p>macOS ARM64 的桌面 Compose 测试宿主使用本地 HTTP fixture 验证了三种情况：纯文本优先且长文可滚动、仅 Markdown 时保留原文和换行、说明为空时版本和操作仍可见。</p>
+<p class="meta">验收覆盖 SDK 样例与桌面 Compose 测试宿主。分发编辑步骤依据服务端仓库。</p>
+</section>
+
+<section id="references">
+<h2>依据</h2>
+<ul>
+<li>原有 SDK 设计及说明取值约定。<a href="v0.1-browser-update.html#protocol">KMP Updater 初版 Spec</a></li>
+<li>当前 SDK 的模型与默认弹窗。<a href="../../updater/src/commonMain/kotlin/top/ntutn/updater/UpdateModels.kt">UpdateRelease</a> · <a href="../../updater-compose/src/commonMain/kotlin/top/ntutn/updater/compose/UpdateHost.kt">UpdateHost</a></li>
+<li>服务端发布说明与公开接口契约。<a href="https://github.com/zerofancy/updater-server/blob/f353aef59d429b68d150a5f90212fd876050c96c/README.md#L131-L142">分发说明</a> · <a href="https://github.com/zerofancy/updater-server/blob/f353aef59d429b68d150a5f90212fd876050c96c/docs/update-api.html#L103-L124">API 字段</a></li>
+</ul>
+</section>
+</main>
+</body>
+</html>

@@ -42,7 +42,8 @@ class UpdateDeviceTest {
     @Test fun updateShowsPlainTextAndCanDismiss() {
         configure(); click("检查更新"); awaitText("发现新版本")
         compose.onNodeWithText("SDK 联调示例 1.2.0").assertIsDisplayed()
-        compose.onNodeWithText("纯文本 <literal>", substring = true).assertExists()
+        compose.onNodeWithText("纯文本 <literal>", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("**更新检测**", substring = true).assertDoesNotExist()
         screenshot("android-update")
         click("暂不更新")
         compose.onNodeWithText("发现新版本").assertDoesNotExist()

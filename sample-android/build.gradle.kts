@@ -9,8 +9,8 @@ android {
         applicationId = "top.ntutn.updater.sample"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -22,7 +22,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
     implementation(project(":sample-shared"))
     if (providers.gradleProperty("usePublishedUpdater").orNull == "true") {
-        implementation("io.github.zerofancy:kmp-updater:0.1.0-SNAPSHOT")
+        implementation("io.github.zerofancy:kmp-updater:0.1.1")
     } else implementation(project(":updater"))
     implementation(libs.activity.compose)
     implementation(libs.kotlinx.coroutines.android)
