@@ -24,6 +24,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-37.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Test, build and verify local publication
         shell: bash
