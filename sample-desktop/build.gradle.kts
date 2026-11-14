@@ -7,7 +7,7 @@ plugins {
 dependencies {
     implementation(project(":sample-shared"))
     if (providers.gradleProperty("usePublishedUpdater").orNull == "true") {
-        implementation("io.github.zerofancy:kmp-updater:0.2.0")
+        implementation("io.github.zerofancy:kmp-updater:0.2.1")
     } else implementation(project(":updater"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
@@ -17,7 +17,7 @@ compose.desktop.application {
     nativeDistributions {
         targetFormats(TargetFormat.Deb, TargetFormat.Dmg, TargetFormat.Msi)
         packageName = "KmpUpdaterSample"
-        packageVersion = "0.2.0"
+        packageVersion = "0.2.1"
         modules("java.net.http", "jdk.crypto.ec", "jdk.unsupported")
     }
 }

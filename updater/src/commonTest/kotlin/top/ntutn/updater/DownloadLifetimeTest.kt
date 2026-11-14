@@ -2,6 +2,7 @@ package top.ntutn.updater
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.*
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.utils.io.ByteChannel
 import kotlinx.coroutines.*
 import kotlin.test.*
@@ -61,5 +62,38 @@ class DownloadLifetimeTest {
             assertEquals(DownloadErrorKind.UnsafeUrl, assertIs<DownloadResult.Failed>(downloader.download(downloadRelease(url))).error.kind)
         }
         downloader.close(); client.close()
+    }
+
+    @Test fun channelWrappedSocketTimeoutIsReportedAsTimeout() = runBlocking {
+        val store = MemoryDownloadStore()
+        val client = HttpClient(MockEngine {
+            respond(ByteChannel().apply { cancel(SocketTimeoutException("socket timeout")) })
+        }) { followRedirects = false }
+        val downloader = createHttpUpdateDownloader(store, DownloadOptions(), client)
+        try {
+            assertEquals(DownloadErrorKind.Timeout, assertIs<DownloadResult.Failed>(downloader.download(downloadRelease())).error.kind)
+            assertTrue(store.aborted)
+        } finally { downloader.close(); downloader.awaitIdle(); client.close() }
+    }
+
+    @Test fun ordinaryTransportFailureRemainsNetwork() = runBlocking {
+        val client = HttpClient(MockEngine { throw IllegalStateException("offline") }) { followRedirects = false }
+        val downloader = createHttpUpdateDownloader(MemoryDownloadStore(), DownloadOptions(), client)
+        try {
+            assertEquals(DownloadErrorKind.Network, assertIs<DownloadResult.Failed>(downloader.download(downloadRelease())).error.kind)
+        } finally { downloader.close(); downloader.awaitIdle(); client.close() }
+    }
+
+    @Test fun timeoutCauseInspectionIsBoundedAndHandlesCycles() {
+        fun wrapped(count: Int): Throwable {
+            var error: Throwable = SocketTimeoutException("socket timeout")
+            repeat(count) { error = IllegalStateException("transport wrapper", error) }
+            return error
+        }
+        assertEquals(DownloadErrorKind.Timeout, downloadNetworkErrorKind(wrapped(15)))
+        assertEquals(DownloadErrorKind.Network, downloadNetworkErrorKind(wrapped(16)))
+        assertEquals(DownloadErrorKind.Network, downloadNetworkErrorKind(IllegalStateException("ordinary transport failure")))
+        val cyclic = object : Exception("cyclic cause") { override val cause: Throwable get() = this }
+        assertEquals(DownloadErrorKind.Network, downloadNetworkErrorKind(cyclic))
     }
 }

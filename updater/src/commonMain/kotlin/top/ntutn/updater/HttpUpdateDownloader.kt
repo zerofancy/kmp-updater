@@ -66,8 +66,8 @@ private class HttpUpdateDownloader(
             return DownloadResult.Failed(DownloadError(DownloadErrorKind.Timeout))
         } catch (_: SocketTimeoutException) {
             return DownloadResult.Failed(DownloadError(DownloadErrorKind.Timeout))
-        } catch (_: Exception) {
-            return DownloadResult.Failed(DownloadError(DownloadErrorKind.Network))
+        } catch (error: Exception) {
+            return DownloadResult.Failed(DownloadError(downloadNetworkErrorKind(error)))
         } finally {
             try {
                 if (!delivered) withContext(NonCancellable + downloadIoDispatcher()) { session?.abort() }
@@ -176,6 +176,19 @@ private class HttpUpdateDownloader(
         lifetime.cancel()
         if (ownsClient) client.close()
     }
+}
+
+/** Ktor byte channels wrap non-copyable transport failures in a channel-closed exception. */
+internal fun downloadNetworkErrorKind(error: Throwable): DownloadErrorKind {
+    var current: Throwable? = error
+    repeat(16) {
+        val cause = current ?: return DownloadErrorKind.Network
+        if (cause is HttpRequestTimeoutException || cause is ConnectTimeoutException || cause is SocketTimeoutException) {
+            return DownloadErrorKind.Timeout
+        }
+        current = cause.cause
+    }
+    return DownloadErrorKind.Network
 }
 
 internal fun resolveDownloadRedirect(base: String, location: String, insecure: Boolean): String {

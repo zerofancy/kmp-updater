@@ -24,7 +24,7 @@ ul,ol{padding-left:24px}li{margin:7px 0}code{font:13px/1.7 ui-monospace,SFMono-R
 <div class="eyebrow">KMP UPDATER / PROPOSAL 0.2</div>
 <h1>发现更新后，直接在应用内下载</h1>
 <p>沿用现有更新协议与两层 SDK，补齐下载进度、取消、重试和本地文件交付。接入下载器后，UI 从“前往下载”变为“下载更新”，浏览器入口继续作为用户可选的回退方式。</p>
-<p><span class="tag">已实现 · 0.2.0</span><span class="tag">2026-11-14</span><span class="tag">Android + JVM 桌面</span></p>
+<p><span class="tag">已实现 · 0.2.1</span><span class="tag">2026-11-14</span><span class="tag">Android + JVM 桌面</span></p>
 </header>
 <nav aria-label="文档目录">
 <a href="#decision">01 建议范围</a><a href="#baseline">02 现状</a><a href="#interaction">03 交互预览</a><a href="#architecture">04 架构与 API</a><a href="#network">05 下载规则</a><a href="#files">06 文件管理</a><a href="#lifecycle">07 生命周期</a><a href="#platform">08 平台交接</a><a href="#delivery">09 实施与验收</a><a href="#sources">10 依据</a>
@@ -227,7 +227,7 @@ UpdateHost(
 <li><strong>状态与生命周期：</strong>双击只启动一次、取消后迟到回调、失败后重试、离开组合、后台返回、更换配置、close 幂等；无需 UI 即可使用核心。</li>
 <li><strong>设备 / 视觉：</strong>Android minSdk 24 与现代设备；Linux、Windows、macOS 至少分别验证下载。长说明、小屏、大字体、键盘操作、下载中主线程响应和约束内存占用。</li>
 </ul>
-<p class="meta">库与示例版本已进入 0.2.0；通过 GitHub Release Maven ZIP 发布；本地发布用于验证 Maven 坐标消费，不改生产服务。验证结果与平台覆盖见本地 docs/verification/v0.2/。</p>
+<p class="meta">库与示例版本已进入 0.2.1；通过 GitHub Release Maven ZIP 发布；本地发布用于验证 Maven 坐标消费，不改生产服务。验证结果与平台覆盖见本地 docs/verification/v0.2/。</p>
 </section>
 
 <section id="sources">
