@@ -244,8 +244,9 @@ fixture 用 Gradle init 脚本添加临时构建源，不修改服务端源码�
 
 库通过 [JitPack](https://jitpack.io/#zerofancy/kmp-updater/v0.2.2) 分发，未发布 Maven Central。
 `jitpack.yml` 配置 JDK 21、安装 Android SDK 37，只发布两个库的六个 Android / JVM / KMP 模块。
-JitPack 构建会同时调整 POM 和 Gradle Module Metadata 的 group、版本与传递依赖；普通源码构建
-仍使用 `io.github.zerofancy`。更新版本并完成测试后，先推送提交，以提交号触发 JitPack 验证，
+JitPack 构建会设置 POM 与 Gradle Module Metadata 的平台引用和传递依赖，并额外提供无分类名的
+源码 ZIP，避开服务端改写源码 JAR 链接的问题；标准源码 JAR 也会保留。普通源码构建仍使用
+`io.github.zerofancy`。更新版本并完成测试后，先推送提交，以提交号触发 JitPack 验证，
 再创建新的 `v版本` 标签并验证该标签的构建与 Android / JVM 消费；不要移动已发布标签。
 
 需要离线 Maven 仓库 ZIP 时，可另外打包并附到 GitHub Release：

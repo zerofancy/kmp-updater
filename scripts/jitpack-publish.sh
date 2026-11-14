@@ -24,5 +24,6 @@ fi
 
 # Keep setup and publication in the same fail-fast command: JitPack may continue
 # after a failing before_install hook.
-exec ./gradlew --no-daemon --console=plain \
+./gradlew --no-daemon --console=plain \
     :updater:publishToMavenLocal :updater-compose:publishToMavenLocal
+python3 scripts/prepare-jitpack-metadata.py "$GROUP.$ARTIFACT" "$VERSION"
