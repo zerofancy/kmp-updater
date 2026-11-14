@@ -8,9 +8,6 @@ plugins {
     alias(libs.plugins.vanniktech.mavenPublish)
 }
 
-group = "io.github.zerofancy"
-version = "0.2.1"
-
 kotlin {
     explicitApi()
     jvm {
