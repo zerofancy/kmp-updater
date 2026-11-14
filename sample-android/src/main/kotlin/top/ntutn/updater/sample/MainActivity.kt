@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import top.ntutn.updater.*
 
@@ -21,8 +22,12 @@ class MainActivity : ComponentActivity() {
         val detection = detectUpdateTarget() as? TargetDetection.Supported
         val opener = createAndroidBrowserOpener(applicationContext, allowInsecureHttp = BuildConfig.DEBUG)
         setContent {
+            val downloaderFactory = remember {
+                { options: DownloadOptions -> createAndroidUpdateDownloader(applicationContext, options) }
+            }
             detection?.let {
-                SampleApp(it.target, opener, intent.getStringExtra("baseUrl") ?: "https://zp.ntutn.top", foreground)
+                SampleApp(it.target, opener, intent.getStringExtra("baseUrl") ?: "https://zp.ntutn.top", foreground,
+                    downloaderFactory = downloaderFactory)
             }
         }
     }

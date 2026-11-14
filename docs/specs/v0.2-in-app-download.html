@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KMP Updater · 应用内下载方案</title>
+<style>
+:root{color-scheme:light;--bg:#f2f5f3;--paper:#fff;--ink:#193730;--muted:#5a6d66;--line:#dae4de;--accent:#176650;--soft:#edf6f0;--warn:#986223}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif}main{max-width:1160px;margin:auto;padding:42px 28px 80px}
+header{padding:36px 40px;border-radius:24px;background:#163e32;color:#fff}header p{max-width:850px;color:#d6e8dd}h1{font-size:clamp(30px,5vw,46px);line-height:1.3;margin:16px 0}h2{font-size:25px;line-height:1.4;margin:0 0 18px}h3{font-size:18px;margin:24px 0 10px}p{margin:10px 0}a{color:var(--accent);text-underline-offset:3px}header a{color:#c0efcf}
+.eyebrow{font-size:12px;letter-spacing:2px;font-weight:700}.tag{display:inline-block;padding:3px 10px;border:1px solid #ffffff45;border-radius:20px;font-size:12px;margin-right:8px}.meta,.muted{color:var(--muted);font-size:14px}a{overflow-wrap:anywhere}nav{display:flex;flex-wrap:wrap;gap:8px 20px;padding:22px 0}nav a{font-size:14px;text-decoration:none}
+section{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:30px;margin-bottom:20px}.note{padding:15px 18px;border-left:4px solid var(--accent);background:var(--soft);border-radius:5px}.warn{border-color:var(--warn);background:#fff7e9}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{padding:20px;border:1px solid var(--line);border-radius:13px}.card h3{margin-top:0}.pill{display:inline-block;padding:2px 9px;font-size:12px;color:var(--accent);background:var(--soft);border-radius:16px}
+ul,ol{padding-left:24px}li{margin:7px 0}code{font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf2ef;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{background:#18332c;color:#e1f3e7;padding:20px;border-radius:12px;overflow:auto;line-height:1.7}pre code{padding:0;background:none;white-space:pre;overflow-wrap:normal}
+.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#f0f6f2}td:first-child{min-width:120px}.flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:18px 0}.step{padding:9px 13px;border:1px solid #cedfd3;background:var(--soft);border-radius:9px}
+.prototype{background:#f2f4f1;border:1px solid var(--line);padding:24px;border-radius:16px}.demo-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}button{font:inherit;cursor:pointer;border-radius:24px;border:1px solid #b8cfc0;padding:7px 15px;background:white;color:var(--accent)}button:hover{background:#e6f0e8}button:focus-visible{outline:3px solid #a27920;outline-offset:3px}button[aria-pressed="true"],button.primary{background:var(--accent);color:white;border-color:var(--accent)}button:disabled{opacity:.6;cursor:default}
+.dialog{background:#fffdf7;border:1px solid #e4e4d8;border-radius:26px;padding:26px;max-width:470px;margin:auto;box-shadow:0 12px 35px #173d3210}.dialog h3{font-size:24px;margin:0 0 12px}.dialog .actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:22px}.status{min-height:90px;margin-top:18px}.bar{height:7px;border-radius:8px;background:#dce9df;overflow:hidden;margin:12px 0}.bar span{display:block;height:100%;width:42%;background:var(--accent);border-radius:8px}.bar.indeterminate span{width:34%;animation:slide 1.5s ease-in-out infinite}.error{color:#a03b2e}.caption{text-align:center;color:var(--muted);font-size:13px;margin-top:15px}.file{font-size:12px;overflow-wrap:anywhere}footer{font-size:13px;color:var(--muted);padding:6px 2px}
+@keyframes slide{0%{transform:translateX(0)}50%{transform:translateX(180%)}100%{transform:translateX(0)}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.bar.indeterminate span{animation:none}}
+@media(max-width:720px){main{padding:18px 12px 40px}header,section{padding:22px}.grid{grid-template-columns:1fr}.prototype{padding:15px}.dialog{padding:20px}h2{font-size:22px}td,th{padding:10px}pre{padding:14px}}
+@media print{body{background:white;font-size:11pt}main{padding:0;max-width:none}header{background:white;color:var(--ink);border:1px solid var(--line)}header p{color:var(--muted)}nav,.demo-tabs{display:none}section{border-radius:0}h2,h3{break-after:avoid}.dialog{box-shadow:none}pre,pre code{white-space:pre-wrap}a{color:inherit}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="eyebrow">KMP UPDATER / PROPOSAL 0.2</div>
+<h1>发现更新后，直接在应用内下载</h1>
+<p>沿用现有更新协议与两层 SDK，补齐下载进度、取消、重试和本地文件交付。接入下载器后，UI 从“前往下载”变为“下载更新”，浏览器入口继续作为用户可选的回退方式。</p>
+<p><span class="tag">已实现 · 0.2.0</span><span class="tag">2026-11-14</span><span class="tag">Android + JVM 桌面</span></p>
+</header>
+<nav aria-label="文档目录">
+<a href="#decision">01 建议范围</a><a href="#baseline">02 现状</a><a href="#interaction">03 交互预览</a><a href="#architecture">04 架构与 API</a><a href="#network">05 下载规则</a><a href="#files">06 文件管理</a><a href="#lifecycle">07 生命周期</a><a href="#platform">08 平台交接</a><a href="#delivery">09 实施与验收</a><a href="#sources">10 依据</a>
+</nav>
+
+<section id="decision">
+<h2>01 / 建议这一版做到哪里</h2>
+<div class="note"><strong>建议首期：用户点击后开始下载，在应用内看到进度，下载成功后获得可使用的本地文件。</strong>继续保留原浏览器模式。暂不引入断点续传、跨进程恢复、后台保活或自动安装；它们不作为本次下载功能的前置条件。</div>
+<div class="grid" style="margin-top:18px">
+<div class="card"><h3>本期交付</h3><ul>
+<li>Android、Linux、Windows、macOS 使用同一下载状态与错误模型。</li>
+<li>流式写盘、已知 / 未知总大小进度、取消、手动重试。</li>
+<li>临时文件隔离、字节数核对、成功后交付本地文件。</li>
+<li>Compose 下载界面、中英文文案、Android / 桌面示例。</li>
+<li>外链不能直接下载时，提供用户主动选择的浏览器回退。</li>
+</ul></div>
+<div class="card"><h3>作为后续独立能力</h3><ul>
+<li>断点续传：需要持久任务、Range 与资源版本验证。</li>
+<li>后台保活：Android 前台服务 / 系统下载任务，桌面守护任务。</li>
+<li>安装交接：Android 系统安装器、桌面安装包打开与重启。</li>
+<li>可信 SHA-256：需服务端发布、存储和查询协议一起补齐。</li>
+</ul></div>
+</div>
+<p class="meta">下载后的平台操作可由宿主接入。SDK 本期的成功条件是文件落盘，不报告安装完成；具体交接建议见第 08 节。</p>
+</section>
+
+<section id="baseline">
+<h2>02 / 现有能力与需要补的部分</h2>
+<div class="table"><table>
+<thead><tr><th>位置</th><th>已具备</th><th>本次变化</th></tr></thead><tbody>
+<tr><td><code>updater</code></td><td>精确匹配平台 / 架构 / 包类型；<code>UpdateRelease</code> 含下载 URL 和可选包大小；Ktor / 协程已引入。</td><td>新增独立 <code>UpdateDownloader</code>，检查接口与版本比较逻辑保持原义。</td></tr>
+<tr><td><code>updater-compose</code></td><td>检查状态、更新弹窗、浏览器交接与错误反馈。</td><td>控制器增加下载状态与操作，更新弹窗切换到下载 / 结果视图。</td></tr>
+<tr><td><code>updater-server</code></td><td><code>downloadUrl</code>、<code>packageSize</code>；R2 上传包使用公开对象 URL 和实测大小。</td><td>首期无需修改服务端。外链可能指向 HTML 页面，不能假定一定可直接下载。</td></tr>
+</tbody></table></div>
+<p>维持现有两库结构，不新增 Maven 模块或大文件读写依赖。下载器按需创建，单纯检查更新的宿主无需配置下载目录或启动下载任务。</p>
+<div class="note warn">当前协议没有文件哈希 / 签名字段。首期只能核对传输字节数、拒绝明显错误页面，不能声称已验证内容真实性；ETag 也不能直接视为 SHA-256。</div>
+</section>
+
+<section id="interaction">
+<h2>03 / 用户会看到什么</h2>
+<p>检测到更新后仍先展示版本、大小和更新说明；仅在用户点击后发起下载。以下为交互示意，按钮只切换演示状态，不会请求文件。</p>
+<div class="prototype">
+<div class="demo-tabs" aria-label="预览状态">
+<button type="button" data-state="available" aria-pressed="true">发现更新</button>
+<button type="button" data-state="downloading" aria-pressed="false">下载中</button>
+<button type="button" data-state="unknown" aria-pressed="false">未知大小</button>
+<button type="button" data-state="completed" aria-pressed="false">下载完成</button>
+<button type="button" data-state="failed" aria-pressed="false">下载失败</button>
+</div>
+<div class="dialog" aria-live="polite" aria-atomic="true">
+<h3 id="demo-title">发现新版本</h3>
+<p><strong>示例应用 1.2.0</strong></p>
+<p class="meta">当前 1.1.0 → 最新 1.2.0</p>
+<div id="demo-description">改善启动体验，修复已知问题。<br><span class="meta">更新包 64.2 MiB</span></div>
+<div class="status" id="demo-status"><p class="meta">下载文件将保存在应用更新目录</p></div>
+<div class="actions" id="demo-actions"></div>
+</div>
+<p class="caption">本地交互原型 · 最终视觉遵循宿主 Material 3 主题 · 下载完成示例使用桌面路径</p>
+</div>
+<div class="table" style="margin-top:20px"><table>
+<thead><tr><th>状态 / 操作</th><th>规定行为</th></tr></thead><tbody>
+<tr><td>发现更新</td><td>主按钮“下载更新”；次按钮“暂不更新”；浏览器下载作为次要入口。保留当前手动 / 静默检测规则。</td></tr>
+<tr><td>正在下载</td><td>显示已下载 / 总大小和进度条；总大小未知时显示已下载大小与不确定进度，不计算虚假百分比。首期不显示易波动的预计剩余时间。</td></tr>
+<tr><td>重复点击 / 检查</td><td>同一控制器只运行一个下载；下载中不重新检查或打开浏览器，按钮按状态禁用。</td></tr>
+<tr><td>取消下载</td><td>立即请求取消、关闭网络与文件流、清理临时文件；完成清理后返回该版本提示，可重新下载。</td></tr>
+<tr><td>返回 / Esc / 外部点击</td><td>下载期间忽略外部点击和被动关闭；返回键 / Esc 执行与“取消下载”相同的操作。显式取消按钮始终可达，取消中禁用重复操作。</td></tr>
+<tr><td>正在保存</td><td>读取结束后关闭文件、核对长度并发布正式文件；此时不提前显示“下载完成”。</td></tr>
+<tr><td>完成</td><td>保留版本、文件名、大小与保存位置，并提供“完成”。宿主可注入“安装”或“打开目录”等完成操作；使用前复查文件是否存在。</td></tr>
+<tr><td>失败</td><td>保留当前版本，展示可理解的错误，提供“重新下载”“浏览器下载”“关闭”。错误不会变成检查更新失败；取消不展示为失败。</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="architecture">
+<h2>04 / 复用现有两层，下载与检查各自管理</h2>
+<div class="flow" aria-label="模块关系"><span class="step">UpdateChecker</span><span>→</span><span class="step">UpdateRelease</span><span>→</span><span class="step">UpdateDownloader</span><span>→</span><span class="step">DownloadedFile</span></div>
+<p><code>updater</code> 负责 HTTP、下载结果与平台文件存储；<code>updater-compose</code> 负责把检查状态和下载状态组合成 UI。自定义 UI 的宿主可直接调用下载器。</p>
+<h3>建议 API 形状</h3>
+<pre><code>// 精简 API；完整公开声明见 DownloadModels.kt。
+public data class DownloadProgress(
+    public val downloadedBytes: Long,
+    public val totalBytes: Long?,
+)
+
+public interface UpdateDownloader {
+    public suspend fun download(
+        release: UpdateRelease,
+        onProgress: (DownloadProgress) -&gt; Unit = {},
+    ): DownloadResult
+    public suspend fun delete(file: DownloadedFile)
+    public suspend fun awaitIdle()
+    public fun close()
+}
+
+// DownloadedFile 由 SDK 创建，包含绝对本地路径、文件名和实际大小。
+// commonMain 不暴露 java.io.File；平台宿主可从本地路径读取文件。
+public sealed interface DownloadResult {
+    public data class Completed(public val file: DownloadedFile) : DownloadResult
+    public data class Failed(public val error: DownloadError) : DownloadResult
+}
+
+// 平台工厂，均支持 DownloadOptions；可选注入独立 HttpClient。
+createAndroidUpdateDownloader(context, options)
+createDesktopUpdateDownloader(directory, options)</code></pre>
+<p>取消沿用协程 <code>CancellationException</code>，不包装为失败。进度回调不保证在 UI 线程执行；Compose 控制器将其转换成可观察状态。所有计数使用 <code>Long</code>，避免大文件溢出。</p>
+<h3>Compose 接入与旧版兼容</h3>
+<ul>
+<li>保留现有 <code>UpdateController(checker, browserOpener, scope)</code> 与 <code>rememberUpdateController(checker, browserOpener)</code>，原调用继续使用浏览器模式。</li>
+<li>新增接收 <code>downloader</code> 的重载。启用后“下载更新”调用 <code>startDownload()</code>；新增 <code>cancelDownload()</code> 与 <code>retryDownload()</code>。原 <code>openDownload()</code> 仍表示浏览器交接。</li>
+<li>新增独立 <code>downloadState: StateFlow&lt;UpdateDownloadState&gt;</code>，包含 Idle、Downloading、Cancelling、Finalizing、Completed、Failed；原 <code>UpdateUiState</code> 的分支保留，不迫使旧宿主修改穷举判断。</li>
+<li>新增 <code>DownloadStrings.Chinese / English</code> 和下载版 <code>UpdateHost</code> 重载；旧入口签名与既有 <code>UpdateStrings</code> 构造参数保留。</li>
+<li>Completed 状态是结果的可靠来源。宿主通过完成操作接收文件；不以可能错过的一次性事件作为唯一交付渠道，浏览器事件也不改成下载成功事件。</li>
+</ul>
+<pre><code>// 平台入口创建并持有 downloader；checker / browser 沿用当前接入。
+val controller = rememberUpdateController(checker, browser, downloader)
+UpdateHost(
+    controller = controller,
+    strings = UpdateStrings.Chinese,
+    downloadStrings = DownloadStrings.Chinese,
+    // 可选完成操作；不配置时默认只有“完成”。
+    // completedAction = ...
+)</code></pre>
+<p class="meta">公开 API 已实现；上方省略了部分平台类型和选项，完整可用接入示例见 README。新版控制器不拥有宿主注入的 checker / downloader；工厂自行创建的 HTTP 客户端由下载器关闭，注入客户端由宿主关闭。</p>
+</section>
+
+<section id="network">
+<h2>05 / 下载规则：流式写盘，显式处理重定向</h2>
+<ol>
+<li><strong>单独配置网络。</strong>复用 Ktor 技术栈，下载使用独立客户端，不继承查询的 10 秒总超时。建议连接超时 15 秒、读空闲超时 60 秒、默认不限制总时长，均可配置；禁止自动重试。阻塞文件 IO 显式放到 IO dispatcher。</li>
+<li><strong>只接受完整 GET。</strong>首期不发 Range；正式文件只接受 HTTP 200。206 不追加到本地，204 / 空文件不能成为成功安装包。401 / 403 显示链接不可访问，可重新检查以取得当前发布信息；协议没有专门的地址刷新接口。</li>
+<li><strong>有限重定向。</strong>关闭客户端自动跟随，由 SDK 手动处理 301 / 302 / 303 / 307 / 308，最多 5 跳，每跳解析相对 Location 并复用 URL 安全规则。默认 HTTPS，可跨域到 CDN / 对象存储；拒绝 HTTPS 降级和非 HTTP(S) scheme。</li>
+<li><strong>隔离凭据。</strong>下载客户端不带业务 Cookie / Authorization，不把认证信息转发到外链，不在错误或日志中输出完整签名 URL。开发 HTTP 继续要求显式开启，Android 明文策略仍由宿主配置。</li>
+<li><strong>固定内存占用。</strong>分块读取 <code>ByteReadChannel</code> 写入文件，建议缓冲区 64 KiB；禁止把响应整体转为 <code>ByteArray</code>。进度最多约每 100 ms 更新一次，结束与失败立即更新。</li>
+<li><strong>长度与限额。</strong>请求 identity 编码，拒绝不能按原始文件字节核对的编码。已知 <code>packageSize</code> 时用作期望长度，否则使用合法 Content-Length；均未知则采用不确定进度。两者同时存在但不一致时失败，读取结束后再核对实际字节数。</li>
+<li><strong>限制异常响应。</strong>默认单文件上限建议 4 GiB，允许宿主按实际包大小调整；对已知大小提前检查，对未知大小在流式读取中持续检查。磁盘空间预检只作提示，实际写盘异常仍须处理。</li>
+<li><strong>识别下载页。</strong>拒绝明确 HTML / XHTML 或 JSON 错误响应，并通过有界前缀探测识别明显 HTML。普通二进制、octet-stream 或缺少 MIME 可以下载，不能只根据 URL 后缀判断。识别能力有限，不替代包格式或密码学验证。</li>
+</ol>
+<div class="note">429 保留合法 Retry-After，并在下载重试入口遵守冷却；没有有效值时默认 30 秒。网络断开、5xx、超时均交由用户手动重试，首期重试从 0 开始，不静默切到浏览器。</div>
+<h3>面向宿主的错误类型</h3>
+<p><code>Network</code>、<code>Timeout</code>、<code>Http</code>、<code>UnsafeUrl</code>、<code>TooManyRedirects</code>、<code>UnsupportedContent</code>、<code>EmptyFile</code>、<code>SizeMismatch</code>、<code>TooLarge</code>、<code>InsufficientSpace</code>、<code>FileIo</code>、<code>Busy</code>、<code>Closed</code>。保留 HTTP 状态与冷却时间；不能确定原因的写盘异常归 FileIo，不误报磁盘已满。</p>
+</section>
+
+<section id="files">
+<h2>06 / 文件存储与清理</h2>
+<div class="table"><table>
+<thead><tr><th>平台</th><th>建议存储</th><th>宿主约定</th></tr></thead><tbody>
+<tr><td>Android</td><td><code>filesDir/kmp-updater/</code> 内部更新目录。</td><td>只持有 applicationContext；下载无需存储权限。采用 filesDir 避免把完成文件完全依赖于可被回收的 cacheDir。</td></tr>
+<tr><td>JVM 桌面</td><td>工厂要求宿主传入更新根目录；SDK 只在自己的子目录内写入。</td><td>宿主依据便携版、系统安装版和沙盒约束选取可写目录，示例展示保存路径。SDK 不假设所有桌面都有相同的 Downloads / cache 位置。</td></tr>
+</tbody></table></div>
+<ul>
+<li>每次下载创建独立任务子目录，先写 <code>payload.part</code>。正式文件名由受限软件名、versionCode、目标和安全扩展名生成，不直接采用展示名、URL 路径或 Content-Disposition 的任意文件名。</li>
+<li>已知包类型使用明确扩展名映射，例如 apk、AppImage、dmg、msi、exe、deb、rpm、zip；未知类型保存为 <code>.bin</code> 并保留包类型元数据，避免拼接任意路径。</li>
+<li>读取完成 → 关闭输出流 → 核对字节数 → 在同一目录重命名为正式文件 → 发布 Completed。重命名失败归 FileIo；不承诺所有文件系统都支持严格原子操作，不覆盖其他任务或宿主文件。</li>
+<li>取消 / 失败立即清理该任务临时文件；进程异常退出遗留的 .part 在下次初始化时清理。清理只限该 SDK 实例持有锁的任务目录，不能删除仍在下载的文件。</li>
+<li>成功文件不随弹窗关闭自动删除。提供显式 delete；初始化时可清理超过 7 天的 SDK 已完成文件，使用 SDK 标记与目录锁避免误删活动任务。宿主要长期保留时，应复制到自己的目录。</li>
+<li>首期不跨启动复用成功缓存，也不恢复残留任务。Completed 后再次访问前检查文件是否存在；下载器仅删除自己创建的文件，不接受任意路径删除。</li>
+</ul>
+</section>
+
+<section id="lifecycle">
+<h2>07 / 并发、取消与生命周期</h2>
+<div class="flow" aria-label="下载状态流转"><span class="step">Available</span><span>→</span><span class="step">Downloading</span><span>→</span><span class="step">Finalizing</span><span>→</span><span class="step">Completed</span></div>
+<p class="meta">失败 → Failed → 手动重试；取消 → Cancelling → Available。下载 UI 子状态依附于当前 Available 版本，不能被旧任务覆盖。</p>
+<ul>
+<li>一个 downloader 实例同时只接受一个任务，直接 API 并发调用返回 Busy。控制器绑定当前 release 快照；取消、重新检查、更换配置时递增任务代次，旧回调和旧结果不能写入新状态。</li>
+<li>取消会传播到 HTTP 和写盘；有界清理完成后才允许重试。文件关闭与必要清理在 finally 中完成，必要时使用 NonCancellable 保证收尾。若下载器已完成正式文件但旧控制器结果被丢弃，回收该孤立文件，不把取消后的结果当作完成。</li>
+<li><code>dismiss()</code> / <code>dispose()</code> 取消本控制器任务；下载器 <code>close()</code> 可重复调用，标记关闭并发起在途下载取消，文件清理由下载任务收尾。<code>awaitIdle()</code> 挂起等待在途任务与清理结束；二者都不关闭宿主拥有的其他依赖。</li>
+<li>只在前台挂载 UpdateHost 的现有约定继续有效。因前后台切换而仅卸载 UpdateHost 不取消下载；任务在其 scope 存活期间尽力运行，回到前台展示最新状态。系统可以挂起或结束后台应用，本期不保证后台持续下载。</li>
+<li>默认 remember 控制器离开组合时取消任务；Android 配置变化若销毁控制器也会取消。需要跨旋转保留时，由宿主用 ViewModel 持有控制器 / scope；进程重启仍不恢复下载。</li>
+<li>宿主需要确定性释放时，调用 <code>close()</code> 后在协程中 <code>awaitIdle()</code>，再释放注入客户端。新配置使用新下载器实例和隔离任务目录；不得阻塞 UI 线程等待。强制进程退出可能中断清理，遗留文件由下次初始化回收。</li>
+</ul>
+</section>
+
+<section id="platform">
+<h2>08 / 下载后的平台交接</h2>
+<p>本期核心只承诺下载与本地文件交付。为了让宿主能继续完成更新，下载版 UpdateHost 预留完成操作：宿主提供按钮文案、动作与失败反馈；SDK 不默认执行下载文件。</p>
+<div class="table"><table>
+<thead><tr><th>平台 / 场景</th><th>建议宿主行为</th><th>实现边界</th></tr></thead><tbody>
+<tr><td>Android APK</td><td>可另行接入“安装”，用户点击后打开系统安装界面。</td><td>使用 FileProvider 的 content URI 和临时读权限，限定暴露更新目录；未知来源授权、REQUEST_INSTALL_PACKAGES 与安装结果处理属于安装适配器，不因下载而默认引入。</td></tr>
+<tr><td>Windows / macOS</td><td>优先提供“打开下载目录”；宿主可显式选择打开安装包。</td><td>系统文件关联 / 目录打开能力需检查支持性，失败反馈回 UI；交接成功不等于更新安装成功。</td></tr>
+<tr><td>Linux</td><td>提供下载路径或“打开下载目录”，由宿主说明当前发行格式如何更新。</td><td>AppImage 不自动 chmod / 替换运行文件；deb / rpm 不自行提权，压缩包不自动解压覆盖。</td></tr>
+<tr><td>没有完成操作</td><td>显示“下载完成”和保存位置，用户关闭后返回应用；宿主仍能从状态取得文件。</td><td>Android 私有目录不是文件管理器通用下载目录。若产品要求用户自行安装，应同时接入安装交接，而不能仅提示用户去私有目录查找。</td></tr>
+</tbody></table></div>
+<div class="note">建议顺序：先验收下载，再按实际宿主需求增加 Android 安装 / 桌面目录操作。商店分发、受管理设备或自有安装器可以使用自己的完成操作，不把安装策略固定进下载内核。</div>
+</section>
+
+<section id="delivery">
+<h2>09 / 实施拆分与验收条件</h2>
+<div class="table"><table>
+<thead><tr><th>步骤</th><th>主要修改</th><th>完成标准</th></tr></thead><tbody>
+<tr><td>1. 下载内核</td><td><code>updater/commonMain</code> 新增下载模型、选项、HTTP 流程；Android / JVM 平台增加文件存储与工厂。</td><td>下载结果与检查结果分离；可靠取消、关闭、重定向、限额和字节数核对。</td></tr>
+<tr><td>2. Compose</td><td>扩展 UpdateController；下载 UI / 文案独立文件；保留现有浏览器 API。</td><td>完整展示已知 / 未知大小、取消 / 重试 / 完成；旧接入仍可使用浏览器模式。</td></tr>
+<tr><td>3. 示例与 fixture</td><td>Android / 桌面示例增加下载器与保存位置；本地 fixture 从测试页面扩为真实二进制及慢速 / 异常端点。</td><td>成功路径下载真实文件，不再只观察浏览器交接；更新 README 和接入示例。</td></tr>
+<tr><td>4. 回归与实机</td><td>核心 / Compose 测试；Android 与桌面真实网络、文件系统验证。</td><td>验证旧检查 / 浏览器逻辑；先完成 Linux、Android 的实测，再分别记录 Windows / macOS 结果，未测平台不能标记已通过。</td></tr>
+</tbody></table></div>
+<h3>必要测试矩阵</h3>
+<ul>
+<li><strong>数据与网络：</strong>已知 / 未知长度、chunked、大文件流式写盘、长度过长 / 过短、空文件、超限、HTML 页面、Content-Encoding、401 / 403 / 429 / 5xx、超时、断网。</li>
+<li><strong>重定向：</strong>同域 / 跨域、相对 Location、循环、超过 5 跳、缺失 Location、HTTPS 降级及非法 scheme；确认不转发敏感头。</li>
+<li><strong>文件系统：</strong>不可写、磁盘不足、重命名失败、取消清理、异常退出残留、多个实例目录锁、成功文件被删除、文件名与路径隔离。</li>
+<li><strong>状态与生命周期：</strong>双击只启动一次、取消后迟到回调、失败后重试、离开组合、后台返回、更换配置、close 幂等；无需 UI 即可使用核心。</li>
+<li><strong>设备 / 视觉：</strong>Android minSdk 24 与现代设备；Linux、Windows、macOS 至少分别验证下载。长说明、小屏、大字体、键盘操作、下载中主线程响应和约束内存占用。</li>
+</ul>
+<p class="meta">库与示例版本已进入 0.2.0；通过 GitHub Release Maven ZIP 发布；本地发布用于验证 Maven 坐标消费，不改生产服务。验证结果与平台覆盖见本地 docs/verification/v0.2/。</p>
+</section>
+
+<section id="sources">
+<h2>10 / 方案依据</h2>
+<p>仓库现状以 2026-11-14 本地源码为准；下列平台资料用于确认实现方式，不代表相关功能已经在本项目验证。</p>
+<ul>
+<li>当前实现：<a href="../../updater/src/commonMain/kotlin/top/ntutn/updater/UpdateModels.kt">UpdateModels.kt</a>、<a href="../../updater/src/commonMain/kotlin/top/ntutn/updater/HttpUpdateChecker.kt">HttpUpdateChecker.kt</a>、<a href="../../updater-compose/src/commonMain/kotlin/top/ntutn/updater/compose/UpdateController.kt">UpdateController.kt</a>、<a href="../../updater-compose/src/commonMain/kotlin/top/ntutn/updater/compose/UpdateHost.kt">UpdateHost.kt</a>。</li>
+<li>服务端依据：相邻 <code>updater-server/docs/update-api.html</code>、<code>routing/UpdateRoutes.kt</code>、<code>upload/UploadRepository.kt</code>、<code>upload/R2StorageGateway.kt</code>。公开协议尚无文件 SHA-256 字段。</li>
+<li><a href="https://ktor.io/docs/client-responses.html">Ktor · Receiving responses / Streaming data</a>：流式响应与分块保存；JVM 阻塞 IO 需要显式选择调度器。</li>
+<li><a href="https://developer.android.com/training/data-storage/app-specific">Android · App-specific files</a>：应用内部存储与缓存生命周期。</li>
+<li><a href="https://developer.android.com/reference/androidx/core/content/FileProvider">Android · FileProvider</a>、<a href="https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()">PackageManager.canRequestPackageInstalls</a>：可选安装交接与权限边界。</li>
+<li><a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.desktop/java/awt/Desktop.html">JDK 11 · Desktop</a>：打开文件 / 目录的支持性检查和失败处理。</li>
+</ul>
+</section>
+<footer>KMP Updater · 应用内下载方案 · 已实现 · 2026-11-14</footer>
+</main>
+<script>
+const demoStates = {
+  available: {title:'发现新版本', content:'<p class="meta">下载文件将保存在应用更新目录</p>', actions:[['暂不更新','closed'],['浏览器下载','browser'],['下载更新','downloading',true]]},
+  downloading: {title:'正在下载更新', content:'<p>27.0 MiB / 64.2 MiB <strong>42%</strong></p><div class="bar" role="progressbar" aria-label="下载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42"><span></span></div><p class="meta">下载完成后将保留在应用更新目录</p>', actions:[['取消下载','available']]},
+  unknown: {title:'正在下载更新', content:'<p>已下载 27.0 MiB</p><div class="bar indeterminate" role="progressbar" aria-label="下载中，总大小未知"><span></span></div><p class="meta">服务器未提供总大小</p>', actions:[['取消下载','available']]},
+  completed: {title:'下载完成', content:'<p>已保存更新包 · 64.2 MiB</p><p class="file">…/updates/example-120-linux-x86_64.AppImage</p><p class="meta">宿主可在此接入“打开目录”等操作</p>', actions:[['完成','closed',true]]},
+  failed: {title:'下载未完成', content:'<p class="error">网络连接已断开，请检查网络后重新下载。</p><p class="meta">临时文件会被清理，重试将从头开始。</p>', actions:[['关闭','closed'],['浏览器下载','browser'],['重新下载','downloading',true]]},
+  browser: {title:'交给浏览器下载', content:'<p class="meta">此处仅演示回退入口，实际 SDK 会使用现有 BrowserOpener。</p>', actions:[['返回预览','available',true]]},
+  closed: {title:'已关闭提示', content:'<p class="meta">此处仅演示关闭结果。重新检测时仍可展示这一版本。</p>', actions:[['重新预览','available',true]]}
+};
+function showDemo(name) {
+  const state = demoStates[name];
+  document.querySelector('#demo-title').textContent = state.title;
+  document.querySelector('#demo-status').innerHTML = state.content;
+  const actions = document.querySelector('#demo-actions');
+  actions.replaceChildren();
+  state.actions.forEach(([label,target,primary]) => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.textContent = label;
+    if(primary) button.className = 'primary';
+    button.addEventListener('click', () => showDemo(target));
+    actions.append(button);
+  });
+  document.querySelectorAll('[data-state]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.state === name)));
+}
+document.querySelectorAll('[data-state]').forEach(button => button.addEventListener('click', () => showDemo(button.dataset.state)));
+showDemo('available');
+</script>
+</body>
+</html>

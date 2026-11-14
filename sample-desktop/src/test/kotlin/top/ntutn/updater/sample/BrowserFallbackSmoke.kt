@@ -9,7 +9,7 @@ fun main() = runBlocking {
     check(java.awt.GraphicsEnvironment.isHeadless())
     val opener = createDesktopBrowserOpener(allowInsecureHttp = true)
     check(opener.open("file:///tmp/app") == BrowserOpenResult.Failed(BrowserOpenError.UnsafeUrl))
-    val result = opener.open("http://127.0.0.1:18082/download?platform=Linux-fallback&token=a%2Bb%26c")
+    val result = opener.open("http://127.0.0.1:18082/browser?platform=Linux-fallback&token=a%2Bb%26c")
     check(result == BrowserOpenResult.Dispatched) { "xdg-open fallback failed: $result" }
     println("Linux headless xdg-open fallback: Dispatched; unsafe scheme: rejected")
 }

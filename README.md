@@ -1,16 +1,16 @@
 # KMP Updater
 
-面向 Compose Multiplatform 的应用更新 SDK：查询最新版本、提示用户，点击后交给系统浏览器下载。
+面向 Compose Multiplatform 的应用更新 SDK：查询最新版本、提示用户，支持应用内下载和系统浏览器下载。
 支持 Android（minSdk 24）及 JVM 桌面的 Linux、Windows、macOS；架构为 ARM64 / X86_64。
 版本按正数 Long `versionCode` 比较，`versionName` 只展示，不解析 SemVer。
 
 ## 模块与依赖
 
-- `updater` / `io.github.zerofancy:kmp-updater:0.1.1`：独立检测核心和平台浏览器适配，不依赖 Compose。
-- `updater-compose` / `io.github.zerofancy:kmp-updater-compose:0.1.1`：可选 Material 3 提示与状态控制器，传递依赖核心。
+- `updater` / `io.github.zerofancy:kmp-updater:0.2.0`：独立检测、流式下载和平台适配，不依赖 Compose。
+- `updater-compose` / `io.github.zerofancy:kmp-updater-compose:0.2.0`：可选 Material 3 提示与状态控制器，传递依赖核心。
 - `sample-shared`、`sample-android`、`sample-desktop`：可配置的 Android / 桌面示例。
 
-从 [GitHub Releases](https://github.com/zerofancy/kmp-updater/releases) 下载并解压 Maven 仓库压缩包，将解压目录加入 Gradle 的依赖仓库，例如 `maven { url = uri("/path/to/kmp-updater-0.1.1-maven") }`。也可从源码执行 `publishToMavenLocal`，然后在宿主启用 `mavenLocal()`。构建需要 JDK 21、Android SDK 37；
+从 [GitHub Releases](https://github.com/zerofancy/kmp-updater/releases) 下载并解压 Maven 仓库压缩包，将解压目录加入 Gradle 的依赖仓库，例如 `maven { url = uri("/path/to/kmp-updater-0.2.0-maven") }`。也可从源码执行 `publishToMavenLocal`，然后在宿主启用 `mavenLocal()`。构建需要 JDK 21、Android SDK 37；
 库 JVM 字节码目标为 11，桌面示例使用 JDK 21 打包。Compose Multiplatform 1.12.1、Material 3 1.9.0、
 Kotlin 2.4.20 为本版验证基线，版本集中在 `gradle/libs.versions.toml`。
 
@@ -18,7 +18,7 @@ Kotlin 2.4.20 为本版验证基线，版本集中在 `gradle/libs.versions.toml
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.zerofancy:kmp-updater-compose:0.1.1")
+    implementation("io.github.zerofancy:kmp-updater-compose:0.2.0")
     // 无默认 UI 时只引用 kmp-updater。
 }
 ```
@@ -96,6 +96,69 @@ Android 示例按 Activity onStart/onStop 控制，桌面示例按当前 JVM 活
 说明优先使用纯文本，Markdown 仅原样展示；不执行 HTML、不自动激活说明内链接。
 浏览器失败会保留更新弹窗，提供重试与可选择复制的地址。
 
+## 应用内下载
+
+下载器与检查器独立创建。Android 使用应用内部更新目录，不需要存储或安装权限；
+桌面由宿主指定可写根目录，SDK 只管理其中自己的子目录。
+
+```kotlin
+// androidMain：只保留 applicationContext。
+val downloader = createAndroidUpdateDownloader(context)
+// jvmMain：选择适合当前安装方式的目录。
+val downloader = createDesktopUpdateDownloader(java.io.File(updateDirectory))
+```
+
+仅引用核心的宿主可直接下载检查结果中的 `UpdateRelease`：
+
+```kotlin
+when (val result = downloader.download(release) { progress ->
+    // downloadedBytes / totalBytes；后者可为 null。回调不保证在 UI 线程。
+    showProgress(progress)
+}) {
+    is DownloadResult.Completed -> useLocalFile(result.file)
+    is DownloadResult.Failed -> showDownloadError(result.error)
+}
+```
+
+Compose 使用新的下载重载；旧的两参数 `rememberUpdateController` 仍是浏览器模式。
+
+```kotlin
+val controller = rememberUpdateController(checker, browserOpener, downloader)
+if (foreground) {
+    UpdateHost(
+        controller = controller,
+        strings = UpdateStrings.Chinese,
+        downloadStrings = DownloadStrings.Chinese,
+        // 可选：完成操作由宿主提供；返回 false 时展示交接失败。
+        // completedAction = CompletedDownloadAction("打开下载目录") { file -> ... },
+    )
+}
+```
+
+`downloadState` 独立暴露 Idle、Downloading、Cancelling、Finalizing、Completed、Failed；
+原 `UpdateUiState` 不增加分支。`startDownload()`、`cancelDownload()`、`retryDownload()`
+对应下载、取消和从头重试。Completed 保留 `DownloadedFile`，含绝对路径、文件名、实际大小及
+`exists()`；完成操作前重新确认文件存在。取消传播 `CancellationException`，不作为失败反馈。
+
+下载使用固定大小缓冲区写盘，网络读取结束、关闭文件、核对字节数并重命名后才报告成功。
+总大小未知时显示已下载字节数与不确定进度。默认上限 4 GiB，可用 `DownloadOptions.maxBytes`
+调整；连接超时 15 秒、读空闲超时 60 秒，没有查询的 10 秒总时限。下载不自动重试；429 重试入口遵守
+Retry-After 冷却。最多手动跟随 5 次安全 HTTP(S) 重定向，不允许 HTTPS 降级。
+HTML / JSON 下载页面会失败并保留浏览器回退；内容识别及字节数核对不等于 SHA-256 或签名验证。
+
+每个下载器只运行一个下载，直接并发调用返回 Busy。取消 / 失败清理临时文件，完成文件不会随
+关闭弹窗删除。`delete(file)` 只接受该下载器创建的文件；下次初始化清理残留临时文件和超过
+7 天的 SDK 完成文件，保留期可配置。长期保留的文件应由宿主复制到自己的目录。
+
+检查器、下载器和注入客户端均由创建者管理。离开组合会取消 remember 控制器的任务；仅因
+前后台切换卸载 `UpdateHost` 不取消任务，但不保证系统后台保活。跨 Android 旋转保留状态时，
+由宿主 ViewModel 持有控制器及 scope。确定性释放时先 `downloader.close()`，再在协程中
+`downloader.awaitIdle()` 等待任务及文件清理完成，最后关闭宿主注入的客户端，不阻塞主线程。
+
+下载本身不安装 APK、不提权、不修改 AppImage 权限，也不替换正在运行的应用。
+Android 完成文件位于私有目录；需要安装时，宿主须另行实现 FileProvider / 安装授权与交接。
+本版不支持断点续传、跨进程恢复、自动安装或安装结果验证。
+
 ## 网络、URL 与生命周期
 
 默认只允许 HTTPS。`baseUrl` 是 origin，可带端口及根 `/`，不支持子路径、凭据、查询或片段。
@@ -111,9 +174,10 @@ INTERNET 权限由核心 manifest 合并。下载 URL 可使用外部存储域�
 
 可通过 `createUpdateChecker(config, client)` 注入 HttpClient；其生命周期由宿主管理。
 注入客户端必须关闭自动重定向、重试，并且不要安装面向该公开端点的 Cookie 或认证插件。
-SDK 不持久缓存、定时检测或收集遥测。完整下载 URL 可能含签名，宿主日志应避免输出。
+下载器注入客户端也遵守上述约定，应与业务认证客户端分开创建。
+SDK 不持久缓存检查结果、定时检测或收集遥测。完整下载 URL 可能含签名，宿主日志应避免输出。
 
-SDK 不下载文件，不验证浏览器页面、文件完整性或安装结果。Android 交给 ACTION_VIEW；
+浏览器模式不验证页面、文件内容或安装结果。Android 交给 ACTION_VIEW；
 桌面优先 Desktop.browse，Linux / macOS 明确失败时回退到 xdg-open / open。
 命令使用参数数组且有超时，默认 URL 关联可能启动浏览器或已注册的链接处理应用。
 
@@ -140,19 +204,37 @@ Windows 使用 gradlew.bat。Linux 打包产物在
 # 另一终端：已连接 Android 设备，打开屏幕，允许系统首次测试 / 浏览器启动确认。
 adb reverse tcp:18082 tcp:18082
 ./gradlew :sample-android:connectedDebugAndroidTest
-# Linux 示例：应用配置 → 检查更新 → 前往下载
+# Linux 示例：应用配置 → 检查更新 → 下载更新
 UPDATER_SAMPLE_URL=http://127.0.0.1:18082 ./gradlew :sample-desktop:run
+# 真实 HTTP + 文件系统：成功文件内容、HTML 拒绝、重定向、取消清理和重试。
+./gradlew :sample-desktop:verifyInAppDownload
 # Linux 实际 xdg-open 回退路径验证：需要 DISPLAY 与默认浏览器。
 ./gradlew :sample-desktop:verifyLinuxBrowserFallback
 ```
 
-fixture 为 sdk-demo 发布 versionCode=10，Linux/X86_64/appimage、Android/ARM64/apk。
+fixture 为 sdk-demo 发布 versionCode=10，支持 Android / 桌面目标的测试包。
 本地 1 可见更新，10 相等，11 高于服务；zip 无匹配；sdk-missing 不存在。
-下载地址是可观察 URL 参数的测试页面，不下载 / 安装文件。
+sdk-demo 为 1 MiB 确定性二进制，sdk-known 提供已知长度，sdk-slow 为 4 MiB 慢速未知长度流；
+sdk-html、sdk-failed、sdk-redirect 分别验证 HTML 页面、HTTP 错误和重定向。
+这些文件只用于验证下载，不能安装；示例可取消勾选“应用内下载”验证原浏览器模式。
 fixture 用 Gradle init 脚本添加临时构建源，不修改服务端源码，停止后留下可删除的临时数据库。
 
-[初版 Spec](docs/specs/v0.1-browser-update.html)。验证报告、截图和测试汇总仅本地保留于
+[应用内下载方案](docs/specs/v0.2-in-app-download.html)、[初版 Spec](docs/specs/v0.1-browser-update.html)。验证报告、截图和测试汇总仅本地保留于
 `docs/verification/`，由 Git 忽略；复现命令与测试源码正常入库。
+
+## 发布
+
+库通过 GitHub Release 的 Maven 仓库 ZIP 分发，未发布 Maven Central。统一更新两个库与示例的
+版本后，运行测试并发布到本地，再打包六个 Android / JVM / KMP 模块：
+
+```bash
+./gradlew :updater:publishToMavenLocal :updater-compose:publishToMavenLocal
+python3 scripts/package-maven-release.py 0.2.0
+```
+
+打包脚本会检查模块元数据、同版本依赖与共享下载源码，产物为
+`build/releases/kmp-updater-0.2.0-maven.zip` 和对应 `.zip.sha256`。
+用解压目录单独验证消费者后，推送发布提交与 `v0.2.0` 标签，并将上述两个文件附到 GitHub Release。
 
 ## 来源与许可证
 

@@ -7,12 +7,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import top.ntutn.updater.*
 import top.ntutn.updater.compose.*
 
 @Composable
-fun SampleApp(target: UpdateTarget, browserOpener: BrowserOpener, baseUrl: String = "https://zp.ntutn.top", foreground: Boolean = true) {
+fun SampleApp(
+    target: UpdateTarget,
+    browserOpener: BrowserOpener,
+    baseUrl: String = "https://zp.ntutn.top",
+    foreground: Boolean = true,
+    downloaderFactory: ((DownloadOptions) -> UpdateDownloader)? = null,
+    completedAction: CompletedDownloadAction? = null,
+) {
     val focusManager = LocalFocusManager.current
     var server by remember { mutableStateOf(baseUrl) }
     var software by remember { mutableStateOf("sdk-demo") }
@@ -22,22 +30,28 @@ fun SampleApp(target: UpdateTarget, browserOpener: BrowserOpener, baseUrl: Strin
     var formError by remember { mutableStateOf<String?>(null) }
     var simulateBrowserFailure by remember { mutableStateOf(false) }
     var activeFailure by remember { mutableStateOf(false) }
+    var inAppDownload by remember { mutableStateOf(downloaderFactory != null) }
+    var activeInAppDownload by remember { mutableStateOf(false) }
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("KMP Updater 示例", style = MaterialTheme.typography.headlineMedium)
-                Text("${target.os} / ${target.arch} · 浏览器下载")
+                Text("${target.os} / ${target.arch} · 应用内 / 浏览器下载")
                 OutlinedTextField(server, { server = it }, label = { Text("服务地址") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedTextField(software, { software = it }, label = { Text("软件内部名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(code, { code = it }, label = { Text("本地 versionCode") }, modifier = Modifier.weight(1f), singleLine = true)
                     OutlinedTextField(packageType, { packageType = it }, label = { Text("包类型") }, modifier = Modifier.weight(1f), singleLine = true)
                 }
-                Row { Checkbox(simulateBrowserFailure, { simulateBrowserFailure = it }); Text("模拟浏览器不可用", Modifier.padding(top = 12.dp)) }
+                if (downloaderFactory != null) {
+                    Row { Checkbox(inAppDownload, { inAppDownload = it }, Modifier.testTag("in-app-download")); Text("应用内下载", Modifier.padding(top = 12.dp)) }
+                }
+                Row { Checkbox(simulateBrowserFailure, { simulateBrowserFailure = it }, Modifier.testTag("fail-browser")); Text("模拟浏览器不可用", Modifier.padding(top = 12.dp)) }
                 Button(onClick = {
                     focusManager.clearFocus()
                     try {
                         activeFailure = simulateBrowserFailure
+                        activeInAppDownload = inAppDownload
                         activeConfig = UpdaterConfig(server, software, UpdateVersion(code.toLong(), "本地 $code"), target, packageType,
                             allowInsecureHttp = server.startsWith("http://"))
                         formError = null
@@ -45,7 +59,10 @@ fun SampleApp(target: UpdateTarget, browserOpener: BrowserOpener, baseUrl: Strin
                 }) { Text("应用配置") }
                 formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 activeConfig?.let { config ->
-                    key(config, activeFailure) { ActiveUpdater(config, browserOpener, activeFailure, foreground) }
+                    key(config, activeFailure, activeInAppDownload) {
+                        ActiveUpdater(config, browserOpener, activeFailure, foreground,
+                            downloaderFactory.takeIf { activeInAppDownload }, completedAction)
+                    }
                 }
             }
         }
@@ -53,14 +70,27 @@ fun SampleApp(target: UpdateTarget, browserOpener: BrowserOpener, baseUrl: Strin
 }
 
 @Composable
-private fun ActiveUpdater(config: UpdaterConfig, browser: BrowserOpener, failBrowser: Boolean, foreground: Boolean) {
+private fun ActiveUpdater(
+    config: UpdaterConfig,
+    browser: BrowserOpener,
+    failBrowser: Boolean,
+    foreground: Boolean,
+    downloaderFactory: ((DownloadOptions) -> UpdateDownloader)?,
+    completedAction: CompletedDownloadAction?,
+) {
     val checker = remember(config) { createUpdateChecker(config) }
     DisposableEffect(checker) { onDispose { checker.close() } }
     val opener = remember(browser, failBrowser) {
         if (failBrowser) BrowserOpener { BrowserOpenResult.Failed(BrowserOpenError.Unavailable) } else browser
     }
-    val controller = rememberUpdateController(checker, opener)
+    val downloader = remember(config, downloaderFactory) {
+        downloaderFactory?.invoke(DownloadOptions(allowInsecureHttp = config.allowInsecureHttp))
+    }
+    DisposableEffect(downloader) { onDispose { downloader?.close() } }
+    val controller = if (downloader != null) rememberUpdateController(checker, opener, downloader)
+        else rememberUpdateController(checker, opener)
     val state by controller.state.collectAsState()
+    val downloadState by controller.downloadState.collectAsState()
     val result by controller.lastResult.collectAsState()
     var event by remember { mutableStateOf("") }
     LaunchedEffect(controller) { controller.events.collect { event = "已交给浏览器处理" } }
@@ -71,6 +101,10 @@ private fun ActiveUpdater(config: UpdaterConfig, browser: BrowserOpener, failBro
     }
     Text("检测状态：${state::class.simpleName}")
     Text("检测结果：${result?.let { it::class.simpleName } ?: "未检测"}")
+    if (downloader != null) Text("下载状态：${downloadState::class.simpleName}")
     if (event.isNotBlank()) Text(event)
-    if (foreground) UpdateHost(controller)
+    if (foreground) {
+        if (downloader != null) UpdateHost(controller, UpdateStrings.Chinese, DownloadStrings.Chinese, completedAction)
+        else UpdateHost(controller)
+    }
 }

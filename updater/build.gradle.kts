@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "io.github.zerofancy"
-version = "0.1.1"
+version = "0.2.0"
 
 kotlin {
     explicitApi()
@@ -23,7 +23,11 @@ kotlin {
         withHostTestBuilder {}.configure {}
         compilerOptions { jvmTarget = JvmTarget.JVM_11 }
     }
+    applyDefaultHierarchyTemplate()
     sourceSets {
+        val jvmAndroidMain = create("jvmAndroidMain") { dependsOn(commonMain.get()) }
+        androidMain.get().dependsOn(jvmAndroidMain)
+        jvmMain.get().dependsOn(jvmAndroidMain)
         commonMain.dependencies {
             api(libs.ktor.client.core)
             implementation(libs.kotlinx.serialization.json)

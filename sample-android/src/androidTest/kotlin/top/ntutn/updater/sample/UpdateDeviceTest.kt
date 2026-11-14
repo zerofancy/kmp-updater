@@ -19,7 +19,12 @@ class UpdateDeviceTest {
         compose.onNodeWithText("软件内部名").performTextReplacement(software)
         compose.onNodeWithText("本地 versionCode").performTextReplacement(code)
         compose.onNodeWithText("包类型").performTextReplacement(type)
-        if (failBrowser) compose.onNode(isToggleable()).performClick()
+        // Keep this suite on the original browser-only API path.
+        if (compose.onAllNodes(hasTestTag("in-app-download") and isOn()).fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithTag("in-app-download").performScrollTo().performClick()
+        }
+        val browserFails = compose.onAllNodes(hasTestTag("fail-browser") and isOn()).fetchSemanticsNodes().isNotEmpty()
+        if (browserFails != failBrowser) compose.onNodeWithTag("fail-browser").performScrollTo().performClick()
         compose.onNodeWithText("应用配置").performScrollTo().performClick()
     }
     private fun click(text: String) {

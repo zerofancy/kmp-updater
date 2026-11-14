@@ -10,8 +10,8 @@ kotlin {
     android { namespace = "top.ntutn.updater.sample.shared"; compileSdk = 37; minSdk = 24 }
     sourceSets.commonMain.dependencies {
         if (providers.gradleProperty("usePublishedUpdater").orNull == "true") {
-            implementation("io.github.zerofancy:kmp-updater-compose:0.1.1")
-        } else implementation(project(":updater-compose"))
+            api("io.github.zerofancy:kmp-updater-compose:0.2.0")
+        } else api(project(":updater-compose"))
         implementation(compose.foundation)
         implementation(libs.material3)
     }
