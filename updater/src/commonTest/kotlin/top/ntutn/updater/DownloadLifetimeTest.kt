@@ -66,12 +66,14 @@ class DownloadLifetimeTest {
 
     @Test fun channelWrappedSocketTimeoutIsReportedAsTimeout() = runBlocking {
         val store = MemoryDownloadStore()
-        val client = HttpClient(MockEngine {
-            respond(ByteChannel().apply { cancel(SocketTimeoutException("socket timeout")) })
-        }) { followRedirects = false }
+        val channel = ByteChannel()
+        val client = HttpClient(MockEngine { respond(channel) }) { followRedirects = false }
         val downloader = createHttpUpdateDownloader(store, DownloadOptions(), client)
         try {
-            assertEquals(DownloadErrorKind.Timeout, assertIs<DownloadResult.Failed>(downloader.download(downloadRelease())).error.kind)
+            val call = async { downloader.download(downloadRelease()) }
+            withTimeout(5000) { store.started.await() }
+            channel.cancel(SocketTimeoutException("socket timeout"))
+            assertEquals(DownloadErrorKind.Timeout, assertIs<DownloadResult.Failed>(call.await()).error.kind)
             assertTrue(store.aborted)
         } finally { downloader.close(); downloader.awaitIdle(); client.close() }
     }
