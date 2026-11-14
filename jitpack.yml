@@ -1,6 +1,4 @@
 jdk:
   - openjdk21
-before_install:
-  - bash scripts/jitpack-android-sdk.sh
 install:
-  - ./gradlew --no-daemon --console=plain :updater:publishToMavenLocal :updater-compose:publishToMavenLocal
+  - bash scripts/jitpack-publish.sh
