@@ -135,6 +135,8 @@ private class HttpUpdateDownloader(
         if (contentLength != null && release.packageSize != null && contentLength != release.packageSize) failDownload(DownloadErrorKind.SizeMismatch)
         val total = release.packageSize ?: contentLength
         if (total != null && total > options.maxBytes) failDownload(DownloadErrorKind.TooLarge)
+        val checksum = release.checksum
+        val digest = checksum?.let { createDownloadDigest(it.algorithm) }
         val session = store.begin(release, total)
         opened(session)
         val channel = response.bodyAsChannel()
@@ -158,13 +160,17 @@ private class HttpUpdateDownloader(
             prefixSize += prefixRead
             if (looksLikeHtml(prefix, prefixSize)) failDownload(DownloadErrorKind.UnsupportedContent)
             session.write(buffer, read)
+            digest?.update(buffer, read)
             if (lastProgress.elapsedNow() >= options.progressInterval) {
                 progress(DownloadProgress(count, total))
                 lastProgress = TimeSource.Monotonic.markNow()
             }
         }
+        // A Ktor channel closed with an error can report EOF instead of throwing from readAvailable.
+        channel.closedCause?.let { throw it }
         if (count == 0L) failDownload(DownloadErrorKind.EmptyFile)
         if (total != null && count != total) failDownload(DownloadErrorKind.SizeMismatch)
+        if (checksum != null && digest?.hexDigest() != checksum.value) failDownload(DownloadErrorKind.ChecksumMismatch)
         progress(DownloadProgress(count, total, DownloadPhase.Finalizing))
         currentCoroutineContext().ensureActive()
         return session.finish(count)

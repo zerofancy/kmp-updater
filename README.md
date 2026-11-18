@@ -6,8 +6,8 @@
 
 ## 模块与依赖
 
-- `updater` / `com.github.zerofancy.kmp-updater:kmp-updater:v0.2.2`：独立检测、流式下载和平台适配，不依赖 Compose。
-- `updater-compose` / `com.github.zerofancy.kmp-updater:kmp-updater-compose:v0.2.2`：可选 Material 3 提示与状态控制器，传递依赖核心。
+- `updater` / `com.github.zerofancy.kmp-updater:kmp-updater:v0.3.0`：提供更新检测、流式下载、文件校验及 Android 安装 API。
+- `updater-compose` / `com.github.zerofancy.kmp-updater:kmp-updater-compose:v0.3.0`：可选 Material 3 提示与状态控制器，传递依赖核心。
 - `sample-shared`、`sample-android`、`sample-desktop`：可配置的 Android / 桌面示例。
 
 在宿主的 `settings.gradle.kts` 添加 JitPack 仓库：
@@ -25,7 +25,7 @@ dependencyResolutionManagement {
 ```
 
 JitPack 版本包含标签的 `v` 前缀，使用上述各库坐标以保留 KMP 平台变体。
-也可从源码执行 `publishToMavenLocal`，以 `io.github.zerofancy:kmp-updater[-compose]:0.2.2`
+也可从源码执行 `publishToMavenLocal`，以 `io.github.zerofancy:kmp-updater[-compose]:0.3.0`
 坐标配合 `mavenLocal()` 消费。[GitHub Releases](https://github.com/zerofancy/kmp-updater/releases)
 另保留 0.2.1 的离线 Maven 仓库 ZIP，解压后可添加 `maven { url = uri("/path/to/kmp-updater-0.2.1-maven") }`。
 源码构建需要 JDK 21、Android SDK 37；
@@ -36,7 +36,7 @@ Kotlin 2.4.20 为本版验证基线，版本集中在 `gradle/libs.versions.toml
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.zerofancy.kmp-updater:kmp-updater-compose:v0.2.2")
+    implementation("com.github.zerofancy.kmp-updater:kmp-updater-compose:v0.3.0")
     // 无默认 UI 时只引用 kmp-updater。
 }
 ```
@@ -116,7 +116,7 @@ Android 示例按 Activity onStart/onStop 控制，桌面示例按当前 JVM 活
 
 ## 应用内下载
 
-下载器与检查器独立创建。Android 使用应用内部更新目录，不需要存储或安装权限；
+下载器与检查器独立创建。Android 下载使用应用内部更新目录，不需要存储或安装权限；
 桌面由宿主指定可写根目录，SDK 只管理其中自己的子目录。
 
 ```kotlin
@@ -162,7 +162,12 @@ if (foreground) {
 总大小未知时显示已下载字节数与不确定进度。默认上限 4 GiB，可用 `DownloadOptions.maxBytes`
 调整；连接超时 15 秒、读空闲超时 60 秒，没有查询的 10 秒总时限。下载不自动重试；429 重试入口遵守
 Retry-After 冷却。最多手动跟随 5 次安全 HTTP(S) 重定向，不允许 HTTPS 降级。
-HTML / JSON 下载页面会失败并保留浏览器回退；内容识别及字节数核对不等于 SHA-256 或签名验证。
+HTML / JSON 下载页面会失败并保留浏览器回退。
+
+`UpdateRelease.checksum` 携带服务端声明的 SHA-256 或 SHA-512 摘要。
+下载器边写盘边计算摘要，匹配后才会发布完成文件。摘要不符返回 `DownloadErrorKind.ChecksumMismatch`，
+清理临时文件。旧发布没有 checksum 时继续下载；声明不完整、格式无效或算法不支持时，
+查询返回 `UpdateErrorKind.InvalidResponse`。Android 在安装时还会检查 APK 签名兼容性。
 
 每个下载器只运行一个下载，直接并发调用返回 Busy。取消 / 失败清理临时文件，完成文件不会随
 关闭弹窗删除。`delete(file)` 只接受该下载器创建的文件；下次初始化清理残留临时文件和超过
@@ -173,9 +178,36 @@ HTML / JSON 下载页面会失败并保留浏览器回退；内容识别及字�
 由宿主 ViewModel 持有控制器及 scope。确定性释放时先 `downloader.close()`，再在协程中
 `downloader.awaitIdle()` 等待任务及文件清理完成，最后关闭宿主注入的客户端，不阻塞主线程。
 
-下载本身不安装 APK、不提权、不修改 AppImage 权限，也不替换正在运行的应用。
-Android 完成文件位于私有目录；需要安装时，宿主须另行实现 FileProvider / 安装授权与交接。
-本版不支持断点续传、跨进程恢复、自动安装或安装结果验证。
+## Android APK 安装
+
+宿主可以把下载器交付的、同应用 ID 且版本更高的完整单 APK 交给 Android。
+启用安装的宿主在 Android Manifest 中声明权限，SDK 会合并用于分享单个 APK 的私有 FileProvider。
+
+```xml
+<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+```
+
+Compose 宿主在 Android 源集使用 `AndroidUpdateHost`。保持入口在组合中，通过 Activity 的
+`onResume` / `onPause` 更新 `foreground`。用户在下载完成后点击「安装更新」。
+
+```kotlin
+val controller = rememberUpdateController(checker, browserOpener, downloader)
+AndroidUpdateHost(
+    controller = controller,
+    activity = activity,
+    foreground = foreground,
+)
+```
+
+自定义界面可从当前前台 Activity 的用户操作调用
+`requestAndroidUpdateInstall(activity, file)`，其中 `file` 来自 Android 下载器的
+`DownloadResult.Completed`。API 26 起收到 `AndroidInstallResult.PermissionRequired` 时，
+在用户点击设置按钮后从主线程调用 `openAndroidInstallPermissionSettings(activity)`。
+返回前台后让用户再次点击安装，SDK 会重新读取授权。API 24–25 由系统处理全局未知来源设置。
+
+`AndroidInstallResult.Dispatched` 表示设备接受了 Activity 启动请求。用户在 Android 界面确认，
+实际安装版本可在应用再次启动时读取。SDK 在交接后保护原 APK 24 小时，期间下载器会拒绝删除，
+避免系统异步读取时文件消失。[Android 安装 spec](docs/specs/android-apk-install.html)。
 
 ## 网络、URL 与生命周期
 
@@ -234,15 +266,37 @@ fixture 为 sdk-demo 发布 versionCode=10，支持 Android / 桌面目标的测
 本地 1 可见更新，10 相等，11 高于服务；zip 无匹配；sdk-missing 不存在。
 sdk-demo 为 1 MiB 确定性二进制，sdk-known 提供已知长度，sdk-slow 为 4 MiB 慢速未知长度流；
 sdk-html、sdk-failed、sdk-redirect 分别验证 HTML 页面、HTTP 错误和重定向。
-这些文件只用于验证下载，不能安装；示例可取消勾选“应用内下载”验证原浏览器模式。
+这些合成文件用于验证下载。示例可取消勾选“应用内下载”验证原浏览器模式。
 fixture 用 Gradle init 脚本添加临时构建源，不修改服务端源码，停止后留下可删除的临时数据库。
+
+验证真实覆盖安装时，使用同一签名构建示例的两个版本并保存各自的 APK。
+
+```bash
+apk_dir="$(mktemp -d)"
+./gradlew :sample-android:assembleDebug
+cp sample-android/build/outputs/apk/debug/sample-android-debug.apk "$apk_dir/base.apk"
+./gradlew -PsampleVersionCode=7 :sample-android:assembleDebug
+cp sample-android/build/outputs/apk/debug/sample-android-debug.apk "$apk_dir/update.apk"
+KMP_UPDATER_FIXTURE_APK="$apk_dir/update.apk" KMP_UPDATER_FIXTURE_APK_VERSION_CODE=7 \
+  ./scripts/run-server-fixture.sh /path/to/updater-server
+```
+
+fixture 运行后，在测试设备上先安装 `base.apk`，再运行 `adb reverse tcp:18082 tcp:18082`，
+用下面的命令启动示例。点击「应用配置」「检查更新」「下载更新」「安装更新」，按 Android
+提示授权并确认。重新启动后检查已装 `versionCode` 为 7。
+
+```bash
+adb shell am start -n top.ntutn.updater.sample/.MainActivity \
+  --es baseUrl http://127.0.0.1:18082 --es software sdk-apk
+adb shell dumpsys package top.ntutn.updater.sample
+```
 
 [应用内下载方案](docs/specs/v0.2-in-app-download.html)、[初版 Spec](docs/specs/v0.1-browser-update.html)。验证报告、截图和测试汇总仅本地保留于
 `docs/verification/`，由 Git 忽略；复现命令与测试源码正常入库。
 
 ## 发布
 
-库通过 [JitPack](https://jitpack.io/#zerofancy/kmp-updater/v0.2.2) 分发，未发布 Maven Central。
+库通过 [JitPack](https://jitpack.io/#zerofancy/kmp-updater/v0.3.0) 分发，未发布 Maven Central。
 `jitpack.yml` 配置 JDK 21、安装 Android SDK 37，只发布两个库的六个 Android / JVM / KMP 模块。
 JitPack 构建会设置 POM 与 Gradle Module Metadata 的平台引用和传递依赖，并额外提供无分类名的
 源码 ZIP，避开服务端改写源码 JAR 链接的问题；标准源码 JAR 也会保留。普通源码构建仍使用
@@ -253,11 +307,11 @@ JitPack 构建会设置 POM 与 Gradle Module Metadata 的平台引用和传递�
 
 ```bash
 ./gradlew :updater:publishToMavenLocal :updater-compose:publishToMavenLocal
-python3 scripts/package-maven-release.py 0.2.2
+python3 scripts/package-maven-release.py 0.3.0
 ```
 
 打包脚本会检查模块元数据、同版本依赖与共享下载源码，产物为
-`build/releases/kmp-updater-0.2.2-maven.zip` 和对应 `.zip.sha256`。
+`build/releases/kmp-updater-0.3.0-maven.zip` 和对应 `.zip.sha256`。
 用解压目录单独验证消费者后，将上述两个文件附到对应 GitHub Release。
 
 ## 来源与许可证

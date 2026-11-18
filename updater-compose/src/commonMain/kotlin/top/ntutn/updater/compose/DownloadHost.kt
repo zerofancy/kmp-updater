@@ -26,18 +26,32 @@ public fun UpdateHost(
     val available = state as? UpdateUiState.Available
     if (controller.downloadEnabled && available != null) {
         val download by controller.downloadState.collectAsState()
-        DownloadDialog(controller, available, download, strings, downloadStrings, completedAction)
+        val completed = download as? UpdateDownloadState.Completed
+        val completion = if (completed != null && completedAction != null) DownloadCompletion(
+            label = if (completed.actionRunning) downloadStrings.actionRunning else completedAction.label,
+            enabled = !completed.actionRunning,
+            onClick = { controller.performCompletedAction(completedAction) },
+        ) else null
+        DownloadDialog(controller, available, download, strings, downloadStrings, completion)
     } else UpdateHost(controller, strings)
 }
 
+internal class DownloadCompletion(
+    val label: String,
+    val enabled: Boolean,
+    val onClick: () -> Unit,
+    val details: (@Composable () -> Unit)? = null,
+    val onDismiss: (() -> Unit)? = null,
+)
+
 @Composable
-private fun DownloadDialog(
+internal fun DownloadDialog(
     controller: UpdateController,
     available: UpdateUiState.Available,
     download: UpdateDownloadState,
     strings: UpdateStrings,
     downloads: DownloadStrings,
-    completedAction: CompletedDownloadAction?,
+    completion: DownloadCompletion? = null,
 ) {
     val active = download is UpdateDownloadState.Downloading || download is UpdateDownloadState.Finalizing ||
         download is UpdateDownloadState.Cancelling
@@ -49,7 +63,13 @@ private fun DownloadDialog(
         while (retryAt != null && now < retryAt) { delay(250); now = Clock.System.now() }
     }
     val limited = retryAt != null && now < retryAt
-    val dismiss = { if (active) controller.cancelDownload() else controller.dismiss() }
+    val dismiss = {
+        when {
+            active -> controller.cancelDownload()
+            completed != null && completion?.onDismiss != null -> completion.onDismiss.invoke()
+            else -> controller.dismiss()
+        }
+    }
     AlertDialog(
         modifier = Modifier.onPreviewKeyEvent {
             if (it.key == Key.Escape && it.type == KeyEventType.KeyUp) { dismiss(); true } else false
@@ -102,6 +122,7 @@ private fun DownloadDialog(
                                 color = MaterialTheme.colorScheme.error,
                             )
                         }
+                        completion?.details?.invoke()
                     }
                 }
                 if (available.browserError != null) {
@@ -115,21 +136,21 @@ private fun DownloadDialog(
                 active -> TextButton(onClick = controller::cancelDownload, enabled = download !is UpdateDownloadState.Cancelling) {
                     Text(if (download is UpdateDownloadState.Cancelling) downloads.cancelling else downloads.cancel)
                 }
-                completed != null && completedAction != null -> TextButton(
-                    onClick = { controller.performCompletedAction(completedAction) }, enabled = !completed.actionRunning,
-                ) { Text(if (completed.actionRunning) downloads.actionRunning else completedAction.label) }
+                completed != null && completion != null -> TextButton(
+                    onClick = completion.onClick, enabled = completion.enabled,
+                ) { Text(completion.label) }
                 completed != null -> TextButton(onClick = controller::dismiss) { Text(downloads.done) }
                 else -> TextButton(onClick = controller::startDownload, enabled = !limited && !available.opening) {
                     Text(if (failure != null) downloads.retry else downloads.download)
                 }
             }
         },
-        dismissButton = if (active || (completed != null && completedAction == null)) null else ({
+        dismissButton = if (active || (completed != null && completion == null)) null else ({
             Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
                 if (completed == null) TextButton(onClick = controller::openDownload, enabled = !available.opening) {
                     Text(if (available.opening) strings.opening else downloads.browserDownload)
                 }
-                TextButton(onClick = controller::dismiss) {
+                TextButton(onClick = dismiss) {
                     Text(if (completed != null) downloads.done else if (failure != null) strings.close else strings.later)
                 }
             }

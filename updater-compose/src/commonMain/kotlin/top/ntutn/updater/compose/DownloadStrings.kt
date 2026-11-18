@@ -20,7 +20,7 @@ public data class DownloadStrings(
     public val timeout: String = "下载连接超时，请稍后重新下载",
     public val unavailable: String = "下载链接暂时不可用，可稍后重新检查更新或使用浏览器下载",
     public val unsupported: String = "该地址不支持直接下载，请使用浏览器下载",
-    public val invalidFile: String = "收到的更新文件不完整，请重新下载",
+    public val invalidFile: String = "更新文件不完整或校验失败，请重新下载",
     public val tooLarge: String = "更新文件超出应用允许的大小，请使用浏览器下载",
     public val storageFailed: String = "无法保存更新文件，请检查存储空间和目录权限",
     public val noSpace: String = "存储空间不足，请清理空间后重新下载",
@@ -40,7 +40,7 @@ public data class DownloadStrings(
             timeout = "The download connection timed out. Please try again later",
             unavailable = "The download link is unavailable. Check for updates later or use your browser",
             unsupported = "This address does not support direct downloads. Use your browser",
-            invalidFile = "The update file is incomplete. Please download again",
+            invalidFile = "The update file is incomplete or failed verification. Please download again",
             tooLarge = "The update exceeds this application's download limit. Use your browser",
             storageFailed = "Could not save the update. Check free space and directory permissions",
             noSpace = "Not enough storage space. Free some space and download again",
@@ -54,7 +54,7 @@ internal fun DownloadStrings.error(kind: DownloadErrorKind): String = when (kind
     DownloadErrorKind.Network -> networkFailed
     DownloadErrorKind.Timeout -> timeout
     DownloadErrorKind.UnsupportedContent -> unsupported
-    DownloadErrorKind.EmptyFile, DownloadErrorKind.SizeMismatch -> invalidFile
+    DownloadErrorKind.EmptyFile, DownloadErrorKind.SizeMismatch, DownloadErrorKind.ChecksumMismatch -> invalidFile
     DownloadErrorKind.TooLarge -> tooLarge
     DownloadErrorKind.InsufficientSpace -> noSpace
     DownloadErrorKind.FileIo -> storageFailed

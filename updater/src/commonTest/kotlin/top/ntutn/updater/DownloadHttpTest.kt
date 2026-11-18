@@ -16,11 +16,13 @@ class DownloadHttpTest {
         status: Int = 200,
         options: DownloadOptions = DownloadOptions(),
         store: MemoryDownloadStore = MemoryDownloadStore(),
+        checksum: UpdateChecksum? = null,
         progress: (DownloadProgress) -> Unit = {},
     ): DownloadResult {
         val client = HttpClient(MockEngine { respond(ByteReadChannel(bytes), HttpStatusCode.fromValue(status), headers) }) { followRedirects = false }
         val downloader = createHttpUpdateDownloader(store, options, client)
-        return try { downloader.download(downloadRelease(size = size), progress) } finally { downloader.close(); downloader.awaitIdle(); client.close() }
+        return try { downloader.download(downloadRelease(size = size).copy(checksum = checksum), progress) }
+        finally { downloader.close(); downloader.awaitIdle(); client.close() }
     }
 
     @Test fun streamsBoundedChunksAndFinalizesAfterLengthCheck() = runBlocking {
@@ -43,6 +45,24 @@ class DownloadHttpTest {
         val known = mutableListOf<DownloadProgress>()
         assertIs<DownloadResult.Completed>(download(headers = headersOf("Content-Length", "3"), progress = known::add))
         assertTrue(known.all { it.totalBytes == 3L })
+    }
+
+    @Test fun verifiesBothDigestsAndDiscardsSameLengthCorruption() = runBlocking {
+        val checksums = listOf(
+            UpdateChecksum(UpdateChecksumAlgorithm.Sha256, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+            UpdateChecksum(UpdateChecksumAlgorithm.Sha512,
+                "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a" +
+                    "2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"),
+        )
+        for (checksum in checksums) {
+            assertIs<DownloadResult.Completed>(download("abc".encodeToByteArray(), 3, checksum = checksum))
+            val store = MemoryDownloadStore()
+            val failed = assertIs<DownloadResult.Failed>(download("abd".encodeToByteArray(), 3, store = store, checksum = checksum))
+            assertEquals(DownloadErrorKind.ChecksumMismatch, failed.error.kind)
+            assertEquals(3L, store.written)
+            assertTrue(store.aborted)
+            assertFalse(store.completed)
+        }
     }
 
     @Test fun lengthErrorsAndLimitsNeverPublishFiles() = runBlocking {

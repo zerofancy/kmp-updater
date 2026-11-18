@@ -48,6 +48,23 @@ public data class UpdaterConfig(
     }
 }
 
+public enum class UpdateChecksumAlgorithm(internal val hexLength: Int) {
+    Sha256(64),
+    Sha512(128),
+}
+
+/** Publisher-declared digest of the complete package, in lowercase hexadecimal. */
+public data class UpdateChecksum(
+    public val algorithm: UpdateChecksumAlgorithm,
+    public val value: String,
+) {
+    init {
+        require(value.length == algorithm.hexLength && value.all { it in '0'..'9' || it in 'a'..'f' }) {
+            "Invalid package checksum"
+        }
+    }
+}
+
 public data class UpdateRelease(
     public val software: String,
     public val target: UpdateTarget,
@@ -63,6 +80,7 @@ public data class UpdateRelease(
     public val packageSize: Long?,
     public val descriptionPlainText: String?,
     public val descriptionMarkdown: String?,
+    public val checksum: UpdateChecksum? = null,
 ) {
     public val description: String? get() = descriptionPlainText?.takeIf { it.isNotBlank() }
         ?: descriptionMarkdown?.takeIf { it.isNotBlank() }

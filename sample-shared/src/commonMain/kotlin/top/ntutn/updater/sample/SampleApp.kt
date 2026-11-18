@@ -20,11 +20,14 @@ fun SampleApp(
     foreground: Boolean = true,
     downloaderFactory: ((DownloadOptions) -> UpdateDownloader)? = null,
     completedAction: CompletedDownloadAction? = null,
+    initialSoftware: String = "sdk-demo",
+    initialVersionCode: Long = 1,
+    updateHost: (@Composable (UpdateController, Boolean) -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
     var server by remember { mutableStateOf(baseUrl) }
-    var software by remember { mutableStateOf("sdk-demo") }
-    var code by remember { mutableStateOf("1") }
+    var software by remember { mutableStateOf(initialSoftware) }
+    var code by remember { mutableStateOf(initialVersionCode.toString()) }
     var packageType by remember { mutableStateOf(if (target.os == UpdateOs.Android) "apk" else "appimage") }
     var activeConfig by remember { mutableStateOf<UpdaterConfig?>(null) }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -61,7 +64,7 @@ fun SampleApp(
                 activeConfig?.let { config ->
                     key(config, activeFailure, activeInAppDownload) {
                         ActiveUpdater(config, browserOpener, activeFailure, foreground,
-                            downloaderFactory.takeIf { activeInAppDownload }, completedAction)
+                            downloaderFactory.takeIf { activeInAppDownload }, completedAction, updateHost)
                     }
                 }
             }
@@ -77,6 +80,7 @@ private fun ActiveUpdater(
     foreground: Boolean,
     downloaderFactory: ((DownloadOptions) -> UpdateDownloader)?,
     completedAction: CompletedDownloadAction?,
+    updateHost: (@Composable (UpdateController, Boolean) -> Unit)?,
 ) {
     val checker = remember(config) { createUpdateChecker(config) }
     DisposableEffect(checker) { onDispose { checker.close() } }
@@ -103,7 +107,9 @@ private fun ActiveUpdater(
     Text("检测结果：${result?.let { it::class.simpleName } ?: "未检测"}")
     if (downloader != null) Text("下载状态：${downloadState::class.simpleName}")
     if (event.isNotBlank()) Text(event)
-    if (foreground) {
+    if (updateHost != null) {
+        updateHost(controller, foreground)
+    } else if (foreground) {
         if (downloader != null) UpdateHost(controller, UpdateStrings.Chinese, DownloadStrings.Chinese, completedAction)
         else UpdateHost(controller)
     }

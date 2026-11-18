@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KMP Updater · Android APK 安装</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f2f5f3;
+  --paper: #fff;
+  --ink: #18352d;
+  --muted: #52675f;
+  --line: #d5e2db;
+  --accent: #12614d;
+  --soft: #eaf5ee;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 20px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.75 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1080px; margin: auto; padding: 38px 24px 64px; }
+header {
+  padding: 34px 40px;
+  border-radius: 20px;
+  background: #173f33;
+  color: #fff;
+}
+header p { max-width: 730px; }
+header .meta { color: #cce0d6; }
+h1 { margin: 8px 0 14px; font-size: clamp(29px, 5vw, 44px); line-height: 1.22; }
+h2 { margin: 0 0 16px; font-size: clamp(21px, 3vw, 27px); line-height: 1.4; }
+h3 { margin: 24px 0 8px; font-size: 18px; }
+p { margin: 10px 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid #8e540f; outline-offset: 4px; }
+.meta, .refs { color: var(--muted); font-size: 14px; }
+nav { display: flex; flex-wrap: wrap; gap: 7px 22px; padding: 20px 4px; }
+nav a { font-size: 14px; }
+section {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 26px 30px;
+  margin: 0 0 18px;
+}
+.callout { margin: 16px 0; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--soft); }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 0; list-style: none; }
+.flow li { margin: 0; padding: 6px 13px; background: var(--soft); border-radius: 6px; }
+.flow li + li::before { content: "→"; margin-right: 10px; color: var(--accent); }
+ul, ol { padding-left: 25px; }
+li { margin: 7px 0; }
+code { padding: 2px 4px; border-radius: 4px; background: #edf2ef; overflow-wrap: anywhere; }
+code, pre { font-family: ui-monospace, Consolas, monospace; font-size: .91em; }
+pre { padding: 16px 19px; border-radius: 9px; background: #19372f; color: #e5f3ea; overflow: auto; }
+pre code { padding: 0; background: none; font-size: inherit; overflow-wrap: normal; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { padding: 10px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { background: #eff5f1; }
+td:first-child { width: 26%; min-width: 112px; }
+@media (max-width: 600px) {
+  main { padding: 14px 10px 30px; }
+  header, section { padding: 19px 16px; }
+  th, td { padding: 9px; }
+}
+@media print {
+  body { background: white; }
+  main { max-width: none; padding: 0; }
+  header, pre { color: var(--ink); background: white; border: 1px solid var(--line); }
+  header .meta { color: var(--muted); }
+  nav { display: none; }
+  h2, h3 { break-after: avoid; }
+  tr { break-inside: avoid; }
+  pre { white-space: pre-wrap; }
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <p class="meta">KMP Updater · v0.3.0 · 2026-11-19</p>
+  <h1>下载完成后，在 Android 上安装更新</h1>
+  <p>Android 宿主在 Manifest 声明安装权限，再调用核心 API 或换用 Android Compose 入口，即可把已下载的 APK 交给设备安装流程。用户在 Android 界面确认覆盖安装。</p>
+</header>
+<nav aria-label="文档目录">
+  <a href="#scope">交付范围</a>
+  <a href="#flow">用户流程</a>
+  <a href="#api">公开 API</a>
+  <a href="#platform">Android 实现</a>
+  <a href="#compose">Compose 接入</a>
+  <a href="#delivery">实施与验收</a>
+</nav>
+
+<section id="scope">
+  <h2>交付范围</h2>
+  <ul>
+    <li>面向 <strong>Android 7.0（API 24）及以上</strong>，安装与当前宿主同包名、签名兼容、版本更高的完整单 APK。APK 可按设备 ABI 分发，但单个下载产物必须可独立安装。</li>
+    <li><code>updater</code> 的 Android 变体提供安装和授权设置入口。<code>updater-compose</code> 提供可选的 <code>AndroidUpdateHost</code>，包含安装按钮、设置引导和本地错误提示。</li>
+    <li>使用安装能力的宿主主动声明 <code>REQUEST_INSTALL_PACKAGES</code>。库 Manifest 合并私有 FileProvider，宿主无需自行配置 provider。</li>
+    <li>首版的系统交接范围止于提交请求。静默安装、系统安装结果监听、重启应用、安装其他应用、AAB 和需要整组提交的 split APK 留待后续单独设计。</li>
+  </ul>
+  <p class="refs">现有下载流程已经交付 <code>DownloadResult.Completed.file</code>。Android 使用内部存储，Compose 的通用完成动作返回布尔值。 <a href="v0.2-in-app-download.html">应用内下载 spec</a> · <a href="../../README.md#应用内下载">当前接入说明</a> · <a href="../../updater-compose/src/commonMain/kotlin/top/ntutn/updater/compose/DownloadState.kt">完成动作源码</a></p>
+</section>
+
+<section id="flow">
+  <h2>用户流程</h2>
+  <ol class="flow" aria-label="更新顺序">
+    <li>下载更新</li>
+    <li>点击「安装更新」</li>
+    <li>核对本地 APK</li>
+    <li>Android 显示安装确认</li>
+  </ol>
+  <div class="table"><table>
+    <thead><tr><th scope="col">场景</th><th scope="col">用户看到的行为</th></tr></thead>
+    <tbody>
+      <tr><td>下载完成</td><td>保留版本和文件信息。安装模式下主操作为「安装更新」，次操作为「完成」。点击安装后显示「正在准备安装…」，合并重复点击。</td></tr>
+      <tr><td>Android 8.0 及以上未授权</td><td>提示「请允许此应用安装未知应用，返回后再点安装更新」。用户可点「打开设置」，返回后用原 APK 再点「安装更新」。每次点击重新读取权限。拒绝授权或直接返回时，下载仍处于完成状态。</td></tr>
+      <tr><td>安装请求已交出</td><td>Android 负责安装确认、取消与失败提示。宿主若恢复到原弹窗，可提示「安装请求已交给 Android」，并允许用户重新打开安装界面。原 APK 可复用。</td></tr>
+      <tr><td>APK 无效或已丢失</td><td>保留对应的失败提示。文件消失或内容无效时，用户可关闭弹窗，再检查并重新下载。包名不符或版本过低时，提示用户需要当前应用的更新版本。</td></tr>
+      <tr><td>设置或安装界面无法打开</td><td>保留下载结果和错误提示，用户可重试或关闭。设备限制可继续由 Android 设置或安装界面说明。</td></tr>
+    </tbody>
+  </table></div>
+  <p class="callout"><strong>「已交出」的判定点是 Activity 启动调用正常返回。</strong> Android 之后可能显示选择界面、拒绝安装、由用户取消或替换宿主进程。宿主下次启动时使用设备的实际已装版本。</p>
+</section>
+
+<section id="api">
+  <h2>公开 API</h2>
+  <h3>核心库 · Android 专用</h3>
+  <pre><code>// top.ntutn.updater · androidMain
+public suspend fun requestAndroidUpdateInstall(
+    activity: Activity,
+    file: DownloadedFile,
+): AndroidInstallResult
+
+public sealed interface AndroidInstallResult {
+    public data object Dispatched : AndroidInstallResult
+    public data object PermissionRequired : AndroidInstallResult
+    public data class Failed(public val reason: AndroidInstallError) : AndroidInstallResult
+}
+
+public fun openAndroidInstallPermissionSettings(
+    activity: Activity,
+): AndroidInstallSettingsResult
+
+public enum class AndroidInstallSettingsResult {
+    Opened, Unsupported, PermissionNotDeclared, ActivityUnavailable, SettingsUnavailable,
+}</code></pre>
+  <p>使用自定义界面的接入方在前台点击时，将 <code>downloader.download(release)</code> 返回的完成文件传入。收到 <code>PermissionRequired</code> 时显示设置操作，用户点击该操作后调用设置入口。APK 读取和解析在 IO 调度器上执行，安装与设置界面从主线程启动。设置入口由主线程调用。</p>
+  <div class="table"><table>
+    <thead><tr><th scope="col">AndroidInstallError</th><th scope="col">判定条件</th></tr></thead>
+    <tbody>
+      <tr><td><code>UnsupportedFile</code><br><code>FileUnavailable</code></td><td>文件并非 Android 下载器在 SDK 更新目录中产出的完成 APK，或已丢失、大小改变、无法读取。</td></tr>
+      <tr><td><code>InvalidApk</code><br><code>PackageMismatch</code><br><code>NotNewer</code></td><td>Android 无法解析 APK、APK 包名与宿主不同，或 APK 版本未超过设备已装版本。</td></tr>
+      <tr><td><code>PermissionNotDeclared</code></td><td>API 26 及以上的宿主合并 Manifest 缺少安装权限声明。属于接入配置问题，显示提示即可。</td></tr>
+      <tr><td><code>ActivityUnavailable</code><br><code>ProviderUnavailable</code></td><td>当前 Activity 已结束或销毁，或无法建立有效的文件 URI 与交接准备状态。</td></tr>
+      <tr><td><code>InstallerUnavailable</code><br><code>LaunchDenied</code></td><td>设备没有匹配的 Activity，或 Android 拒绝启动。设置启动失败统一返回 <code>SettingsUnavailable</code>。</td></tr>
+      <tr><td><code>Busy</code></td><td>同一个文件正处于准备或交接中，当前请求可稍后重试。</td></tr>
+    </tbody>
+  </table></div>
+  <p>宿主持有 Activity，SDK 只在本次调用期间使用。调用应绑定当前前台界面的生命周期，界面失活时取消尚未交接的准备任务。取消传播 <code>CancellationException</code>；已经发出的请求由 Android 继续处理。库错误仅返回枚举，避免暴露私有路径、文件 URI 或下载地址。</p>
+</section>
+
+<section id="platform">
+  <h2>Android 实现</h2>
+  <h3>按系统版本授权</h3>
+  <pre><code>&lt;!-- 启用安装能力的宿主 AndroidManifest.xml --&gt;
+&lt;uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /&gt;</code></pre>
+  <ul>
+    <li><strong>API 26 及以上。</strong> 从自身 <code>PackageInfo.requestedPermissions</code> 检查宿主声明，再使用 <code>canRequestPackageInstalls()</code> 查询授权。授权为 false 时返回 <code>PermissionRequired</code>。用户主动打开设置时使用 <code>ACTION_MANAGE_UNKNOWN_APP_SOURCES</code> 和 <code>package:&lt;宿主 applicationId&gt;</code>，每次重新提交前复查实际状态。权限查询或启动被系统拒绝时返回可处理的错误。</li>
+    <li><strong>API 24–25。</strong> 直接走 APK 交接，由系统安装流程处理设备的全局未知来源选项。安装授权设置入口在这些版本返回 <code>Unsupported</code>。</li>
+  </ul>
+  <p class="refs"><a href="https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()">安装授权 API</a> · <a href="https://developer.android.com/reference/android/provider/Settings#ACTION_MANAGE_UNKNOWN_APP_SOURCES">安装来源设置</a> · <a href="https://developer.android.com/distribute/marketing-tools/alternative-distribution#unknown-sources">未知来源行为</a></p>
+
+  <h3>校验实际安装包</h3>
+  <ol>
+    <li>复用下载存储的任务校验。接受 Android SDK 内部完成文件对象，核对 <code>filesDir/kmp-updater/</code> 下的任务目录、已完成标记、文件名和大小。拒绝临时文件、符号链接、目录穿越和宿主自制的文件对象。用任务锁协调准备、删除与自动清理。</li>
+    <li>用 <code>PackageManager.getPackageArchiveInfo</code> 读取包元数据。期望包名来自当前的 <code>activity.packageName</code>，服务端 <code>UpdateRelease.packageName</code> 是展示字段。安装预检比较 APK 与设备已装版本的实际 <code>versionCode</code>，更新检测继续使用现有服务协议。API 28 起使用 long version code，旧系统使用 <code>versionCode.toLong()</code>。</li>
+    <li>宿主发布时使用同一 applicationId 和兼容签名。Android 在正式安装时负责签名及签名轮换、split 完整性、系统版本和设备策略等校验。SDK 的归档预检只判断本地文件和包元数据。</li>
+  </ol>
+  <p class="refs"><a href="../../updater/src/jvmAndroidMain/kotlin/top/ntutn/updater/JvmDownloadStorage.kt">现有任务锁和文件标记</a> · <a href="https://developer.android.com/reference/android/content/pm/PackageManager#getPackageArchiveInfo(java.lang.String,int)">APK 归档读取</a> · <a href="https://developer.android.com/reference/android/content/pm/PackageInfo#getLongVersionCode()">Android 版本号</a></p>
+
+  <h3>下载 checksum 校验</h3>
+  <p>服务端在 <code>latest</code> 中成对返回 <code>checksumAlgorithm</code> 与 <code>checksumValue</code>。SDK 解析 <code>sha256</code> 和 <code>sha512</code> 到 <code>UpdateRelease.checksum</code>。两项都缺失或为 JSON <code>null</code> 时视为未提供。声明不完整、格式无效或算法不支持时，查询返回 <code>InvalidResponse</code>。</p>
+  <p>Android 与 JVM 共用下载流程，在流式写盘时增量计算原始字节的摘要。摘要一致后才转正文件并返回 <code>Completed</code>。摘要不匹配返回 <code>ChecksumMismatch</code> 并清理临时文件。旧发布未提供摘要时依然可以下载和发起安装。APK 签名兼容性仍由 Android 在安装时检查。</p>
+  <p class="refs"><a href="../../../updater-server/docs/update-api.html">服务端更新协议</a> · <a href="../../updater/src/commonMain/kotlin/top/ntutn/updater/UpdateProtocol.kt">响应解析</a> · <a href="../../updater/src/commonMain/kotlin/top/ntutn/updater/HttpUpdateDownloader.kt">下载完成流程</a></p>
+
+  <h3>授权读取并交接</h3>
+  <ul>
+    <li>Android AAR 自带专用 FileProvider 子类和路径资源。authority 为 <code>${applicationId}.kmp-updater.install</code>，<code>exported=false</code>、<code>grantUriPermissions=true</code>，只映射 <code>filesDir/kmp-updater/</code>。KMP Android library 启用 <code>androidResources</code>，AndroidX Core 依赖放在 <code>androidMain</code>。</li>
+    <li>用 <code>setDataAndType</code> 设置 <code>content://</code> URI 和 <code>application/vnd.android.package-archive</code>，通过 <code>ACTION_VIEW</code> 与 <code>FLAG_GRANT_READ_URI_PERMISSION</code> 授予该 URI 的临时读取权限。从当前 Activity 直接调用 <code>startActivity</code> 并捕获 <code>ActivityNotFoundException</code> 和 <code>SecurityException</code>。由 Android 选择 APK handler，支持不同厂商的安装器，也避开 Android 11 起对预先查询匹配应用的限制。</li>
+    <li>系统可能在启动调用返回后才打开文件。交接前在同一任务锁下记录持久的 24 小时保护期，再启动 Activity 并释放锁。自动清理按普通保留期和保护期两者较晚的到期时间处理。保护期间，显式 <code>delete(file)</code> 沿用下载器的忙错误并保留文件。保护按文件独立记录，覆盖进程重建，无需再复制一份 APK。</li>
+    <li>启动明确失败时可恢复该任务之前的保护期限。无法确认请求是否已经发出时保留期限。关闭弹窗、切换前后台或销毁控制器均不立即删除该文件或主动撤销 URI 权限。过期文件沿用下次下载器初始化时的惰性清理。</li>
+  </ul>
+  <p class="refs"><a href="https://developer.android.com/reference/androidx/core/content/FileProvider">FileProvider</a> · <a href="https://developer.android.com/reference/tools/gradle-api/9.2/com/android/build/api/dsl/KotlinMultiplatformAndroidLibraryExtension#androidResources()">KMP Android 资源</a> · <a href="https://developer.android.com/training/package-visibility/use-cases#start-activity">Activity 启动和包可见性</a> · <a href="https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/PackageInstaller/AndroidManifest.xml">AOSP 安装器 Intent 声明</a></p>
+  <p class="callout">首版使用 APK Intent 交接。若后续需要系统安装状态或 split APK，再评估 <code>PackageInstaller.Session</code> 的写入、提交和结果回传。 <a href="https://developer.android.com/reference/android/content/pm/PackageInstaller.Session">PackageInstaller.Session</a></p>
+</section>
+
+<section id="compose">
+  <h2>Compose 接入</h2>
+  <pre><code>// Android 源集，在 MaterialTheme 内。
+// 宿主在 Activity onResume / onPause 时更新 foreground。
+val controller = rememberUpdateController(checker, browserOpener, downloader)
+AndroidUpdateHost(
+    controller = controller,
+    activity = activity,
+    foreground = foreground,
+)</code></pre>
+  <ul>
+    <li><code>AndroidUpdateHost</code> 沿用共享的更新与下载弹窗，仅在 Android APK 的完成态渲染安装动作。安装状态由这个入口内部维护，绑定当前 release 和文件。安装文案有中英文默认值，宿主可通过 <code>installStrings</code> 参数覆盖。</li>
+    <li>宿主持续组合此入口，<code>foreground=false</code> 时只隐藏弹窗。回前台后可再次点击安装。用户拒绝授权、取消系统安装或关闭弹窗后，库保留原有的文件保留机制。若 Activity 重建，安装动作使用新的 Activity；需要保持下载状态时可继续由宿主 ViewModel 持有现有控制器。</li>
+    <li>通用 <code>UpdateHost</code> 和 <code>CompletedDownloadAction</code> 保留当前签名和行为。Android 宿主主动换入口后才出现安装操作。已有 0.2.x 调用方可继续使用浏览器、纯下载或自定义完成动作，JVM 桌面仍使用通用入口。</li>
+  </ul>
+  <p class="refs"><a href="../../updater-compose/src/commonMain/kotlin/top/ntutn/updater/compose/DownloadHost.kt">当前下载弹窗</a> · <a href="../../sample-android/src/main/kotlin/top/ntutn/updater/sample/MainActivity.kt">Android 示例入口</a></p>
+</section>
+
+<section id="delivery">
+  <h2>实施与验收</h2>
+  <ol>
+    <li>先实现核心安装与设置入口、任务交接保留和 Android AAR 资源。保留 JVM 下载存储原行为，限制交接保护只影响 Android 中送去安装的文件。</li>
+    <li>复用共用弹窗，实现 Android Compose 入口。接到 <code>sample-android</code>，在 README 给出 Compose 与自定义 UI 两条接入路径。</li>
+    <li>保留现有合成下载 fixture，另用真实签名 APK 做安装 fixture。以同一 Android 示例 applicationId、同签名、较高 versionCode 构建目标包，由本地 fixture 服务发布。安装验收使用独立的软件标识，初始版本取示例应用的实际已装版本。</li>
+  </ol>
+  <div class="table"><table>
+    <thead><tr><th scope="col">验收项目</th><th scope="col">通过条件</th></tr></thead>
+    <tbody>
+      <tr><td>下载 checksum</td><td>SHA-256 与 SHA-512 摘要匹配时发布完成文件。同长度内容被修改时返回校验错误，清理临时文件。旧发布缺少摘要时可继续下载。</td></tr>
+      <tr><td>API 24 或 25</td><td>从私有目录下载完整 APK 后可启动系统确认。设备禁用全局未知来源时由系统处理。</td></tr>
+      <tr><td>API 26+ 和当前 API</td><td>覆盖首次未授权、打开设置但拒绝、允许后返回再点、取消安装后重试、确认安装。至少用一个新系统验证无包可见性查询时的真实 URI 交接。</td></tr>
+      <tr><td>覆盖结果</td><td>确认后由宿主进程外通过 adb 或设备设置核对较高已装版本，重开后读取实际版本并确认示例应用数据仍保留。签名不兼容时系统拒绝，已装版本保持原值。</td></tr>
+      <tr><td>拒绝非法输入</td><td>覆盖外部路径、符号链接、临时文件、文件消失或大小变化、损坏 APK、另一 applicationId、同版本与低版本。所有预检拒绝均不授予文件 URI。</td></tr>
+      <tr><td>异常与保留</td><td>覆盖无安装处理程序、Manifest 未声明权限、Activity 销毁、连续点击、离开前台和设置页返回。模拟极短下载保留期，验证交接文件在保护期内避开清理和显式删除，重建进程后保护仍生效，过期后可清理。</td></tr>
+      <tr><td>发布制品与兼容</td><td>从本地 Maven 发布制品构建独立 Android 消费方，核对 AAR 的 provider、路径 XML、依赖和按 applicationId 生成的 authority。核对安装权限来自启用安装的宿主 Manifest。跑原有下载、Compose 与 JVM 回归验证。</td></tr>
+    </tbody>
+  </table></div>
+  <p class="callout">本地联调在 Android 7.0（API 24）与 Android 15（API 35）模拟器从 versionCode 5 覆盖升级到 6，重新读取已装版本并确认应用数据保留。API 35 另外验证未授权返回、授权后重试和取消安装后复用原 APK。</p>
+  <p class="refs"><a href="../../scripts/server-fixture/SdkFixture.kt">现有合成下载 fixture</a> · <a href="../../sample-android/src/androidTest/kotlin/top/ntutn/updater/sample/DownloadDeviceTest.kt">现有 Android 下载用例</a> · <a href="../../.github/workflows/gradle.yml">发布制品消费验证</a></p>
+</section>
+</main>
+</body>
+</html>

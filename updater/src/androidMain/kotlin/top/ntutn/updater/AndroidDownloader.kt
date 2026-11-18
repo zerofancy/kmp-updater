@@ -10,5 +10,7 @@ public fun createAndroidUpdateDownloader(
     options: DownloadOptions = DownloadOptions(),
     client: HttpClient? = null,
 ): UpdateDownloader = createHttpUpdateDownloader(
-    JvmDownloadFileStore(File(context.applicationContext.filesDir, "kmp-updater"), options), options, client,
+    JvmDownloadFileStore(androidUpdateDirectory(context), options, allowApkHandoff = true), options, client,
 )
+
+internal fun androidUpdateDirectory(context: Context): File = File(context.applicationContext.filesDir, "kmp-updater")

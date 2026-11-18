@@ -44,7 +44,7 @@ public interface DownloadedFile {
 
 public enum class DownloadErrorKind {
     Network, Timeout, Http, UnsafeUrl, TooManyRedirects, UnsupportedContent, EmptyFile,
-    SizeMismatch, TooLarge, InsufficientSpace, FileIo, Busy, Closed,
+    SizeMismatch, TooLarge, InsufficientSpace, FileIo, Busy, Closed, ChecksumMismatch,
 }
 
 /** Does not include response bodies or URLs, which may contain signed credentials. */
@@ -60,7 +60,7 @@ public sealed interface DownloadResult {
 }
 
 public interface UpdateDownloader {
-    /** Streams a complete file. Cancellation propagates after temporary-file cleanup. */
+    /** Streams and verifies the declared checksum before delivering the file. Cancellation propagates after cleanup. */
     public suspend fun download(
         release: UpdateRelease,
         onProgress: (DownloadProgress) -> Unit = {},

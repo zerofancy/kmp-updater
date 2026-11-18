@@ -17,6 +17,7 @@ kotlin {
         namespace = "top.ntutn.updater"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+        androidResources { enable = true }
         withHostTestBuilder {}.configure {}
         compilerOptions { jvmTarget = JvmTarget.JVM_11 }
     }
@@ -30,7 +31,12 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             api(libs.kotlinx.coroutines.core)
         }
-        androidMain.dependencies { implementation(libs.ktor.client.okhttp) }
+        androidMain.dependencies {
+            implementation(libs.androidx.annotation)
+            implementation(libs.androidx.core)
+            implementation(libs.ktor.client.okhttp)
+            implementation(libs.kotlinx.coroutines.android)
+        }
         jvmMain.dependencies { implementation(libs.ktor.client.okhttp) }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

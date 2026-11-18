@@ -83,7 +83,10 @@ class DownloadDeviceTest {
         assertTrue("Fixture bytes must match the streamed response", bytes.indices.all { bytes[it] == (it % 251).toByte() })
         // The SDK canonicalizes its root; Android may expose filesDir through a path alias.
         compose.onNodeWithText(file.canonicalPath).assertExists()
+        compose.onNodeWithText("安装更新").assertExists()
         screenshot("android-download-completed")
+        compose.onNodeWithText("安装更新").performClick()
+        awaitText("Android 无法读取此 APK")
         compose.onNodeWithText("完成").performClick()
         configure("sdk-redirect")
         compose.onNodeWithText("下载更新").performClick()

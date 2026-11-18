@@ -13,7 +13,7 @@ val onJitPack = providers.environmentVariable("JITPACK").orNull == "true"
 val publicationGroup = if (onJitPack) {
     "${providers.environmentVariable("GROUP").get()}.${providers.environmentVariable("ARTIFACT").get()}"
 } else "io.github.zerofancy"
-val publicationVersion = if (onJitPack) providers.environmentVariable("VERSION").get() else "0.2.2"
+val publicationVersion = if (onJitPack) providers.environmentVariable("VERSION").get() else "0.3.0"
 
 allprojects {
     group = publicationGroup

@@ -50,6 +50,39 @@ class UpdateCheckerTest {
         assertEquals("**Markdown**", fallback.description)
         assertNull(assertIs<UpdateCheckResult.Available>(query(body())).release.packageSize)
     }
+
+    @Test fun acceptsSupportedChecksumsAndMissingMetadata() = runBlocking {
+        suspend fun checksum(extra: String): UpdateChecksum? =
+            assertIs<UpdateCheckResult.Available>(query(body(extra = extra))).release.checksum
+
+        for ((wire, algorithm, length) in listOf(
+            Triple("sha256", UpdateChecksumAlgorithm.Sha256, 64),
+            Triple("sha512", UpdateChecksumAlgorithm.Sha512, 128),
+        )) {
+            val hex = "ab".repeat(length / 2)
+            assertEquals(UpdateChecksum(algorithm, hex), checksum(""","checksumAlgorithm":"$wire","checksumValue":"$hex""""))
+        }
+        assertNull(checksum(""))
+        assertNull(checksum(""","checksumAlgorithm":null,"checksumValue":null"""))
+    }
+
+    @Test fun rejectsMalformedAndUnsupportedChecksums() = runBlocking {
+        val hex = "a".repeat(64)
+        for (extra in listOf(
+            ""","checksumAlgorithm":"sha256"""",
+            ""","checksumValue":"$hex"""",
+            ""","checksumAlgorithm":"sha256","checksumValue":null""",
+            ""","checksumAlgorithm":null,"checksumValue":"$hex"""",
+            ""","checksumAlgorithm":"sha1","checksumValue":"$hex"""",
+            ""","checksumAlgorithm":"sha512","checksumValue":"$hex"""",
+            ""","checksumAlgorithm":"sha256","checksumValue":"${"g".repeat(64)}"""",
+            ""","checksumAlgorithm":"sha256","checksumValue":42""",
+        )) {
+            val result = assertIs<UpdateCheckResult.Failed>(query(body(extra = extra)))
+            assertEquals(UpdateErrorKind.InvalidResponse, result.error.kind)
+        }
+    }
+
     @Test fun malformedSuccessCannotBecomeNoUpdate() = runBlocking {
         val malformed = listOf(
             body("10"), body("\"0\""), body("\"-1\""), body("\"9223372036854775808\""), body("\"1.2\""),

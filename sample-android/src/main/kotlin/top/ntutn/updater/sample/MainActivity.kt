@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import top.ntutn.updater.*
+import top.ntutn.updater.compose.AndroidUpdateHost
 
 class MainActivity : ComponentActivity() {
     private var foreground by mutableStateOf(false)
@@ -26,11 +27,29 @@ class MainActivity : ComponentActivity() {
                 { options: DownloadOptions -> createAndroidUpdateDownloader(applicationContext, options) }
             }
             detection?.let {
-                SampleApp(it.target, opener, intent.getStringExtra("baseUrl") ?: "https://zp.ntutn.top", foreground,
-                    downloaderFactory = downloaderFactory)
+                SampleApp(
+                    target = it.target,
+                    browserOpener = opener,
+                    baseUrl = intent.getStringExtra("baseUrl") ?: "https://zp.ntutn.top",
+                    foreground = foreground,
+                    downloaderFactory = downloaderFactory,
+                    initialSoftware = (if (BuildConfig.DEBUG) intent.getStringExtra("software") else null) ?: "sdk-demo",
+                    initialVersionCode = BuildConfig.VERSION_CODE.toLong(),
+                    updateHost = { controller, isForeground ->
+                        AndroidUpdateHost(controller, this@MainActivity, isForeground)
+                    },
+                )
             }
         }
     }
-    override fun onStart() { super.onStart(); foreground = true }
-    override fun onStop() { foreground = false; super.onStop() }
+
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+    }
+
+    override fun onPause() {
+        foreground = false
+        super.onPause()
+    }
 }

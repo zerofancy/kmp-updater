@@ -16,6 +16,23 @@ private fun JsonObject.text(key: String, required: Boolean = false): String? {
 private fun JsonObject.obj(key: String): JsonObject = this[key] as? JsonObject ?: invalid()
 private fun decimal(raw: String): Long = raw.takeIf { it.matches(Regex("[0-9]+")) }?.toLongOrNull() ?: invalid()
 
+private fun JsonObject.checksum(): UpdateChecksum? {
+    val algorithmField = this["checksumAlgorithm"]
+    val valueField = this["checksumValue"]
+    if ((algorithmField == null || algorithmField == JsonNull) && (valueField == null || valueField == JsonNull)) return null
+    val algorithm = when (text("checksumAlgorithm", required = true)) {
+        "sha256" -> UpdateChecksumAlgorithm.Sha256
+        "sha512" -> UpdateChecksumAlgorithm.Sha512
+        else -> invalid()
+    }
+    val value = text("checksumValue", required = true) ?: invalid()
+    return try {
+        UpdateChecksum(algorithm, value)
+    } catch (_: IllegalArgumentException) {
+        invalid()
+    }
+}
+
 internal fun parseRelease(root: JsonObject, config: UpdaterConfig): UpdateRelease {
     fun validateTarget(value: JsonObject) {
         if (value.text("software", true) != config.software || value.text("os", true) != config.target.os.name ||
@@ -40,5 +57,6 @@ internal fun parseRelease(root: JsonObject, config: UpdaterConfig): UpdateReleas
         latest.text("publishedAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
         latest["packageSize"]?.takeIf { it != JsonNull }?.let { decimal(latest.text("packageSize", true)!!) },
         latest.text("descriptionPlainText"), latest.text("descriptionMarkdown"),
+        latest.checksum(),
     )
 }
